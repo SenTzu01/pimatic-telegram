@@ -1,5 +1,5 @@
 {
-  "name": "pimatic-telegram",
+  "name": "@sentzu01/pimatic-telegram",
   "description": "Plugin for sending telegrams",
   "author": "Danny Wigmans",
   "license": "GPL-2.0",
@@ -22,10 +22,17 @@
     "telegram-bot-client": ">=1.4.0"
   },
   "peerDependencies": {
-    "pimatic": "0.8.*"
+    "pimatic": ">=0.9.*"
   },
   "engines": {
     "node": ">0.8.x",
     "npm": ">1.1.x"
+  },
+  "bugs": {
+    "url": "https://github.com/SenTzu01/pimatic-telegram/issues"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
   }
 }
