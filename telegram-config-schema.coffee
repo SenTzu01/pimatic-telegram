@@ -1,11 +1,17 @@
-# #my-plugin configuration options
-# Declare your config option for your plugin here. 
 module.exports = {
-  title: "my plugin config options"
+  title: "Telegram config"
   type: "object"
   properties:
-    option1:
-      description: "Some option"
+    host:
+      description: "API Server address"
       type: "string"
-      default: "foo"
+      default: "api.telegram.org"
+    apiToken:
+      description: "API token for your Bot (Obtained via BotFather)"
+      type: "string"
+      default: "123456789:ABC1AaBcd12AbBCD1BcCaB012CCCCClAbcA"
+    userChatId:
+      description: "ChatID/UserID of the recipient of messages"
+      type: "string"
+      default: "123456789"
 }

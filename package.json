@@ -1,21 +1,25 @@
-{ "name": "pimatic-plugin-template",
-  "description": "The plugin description",
-  "author": "Your Name <you@example.com> (http://your-website)",
-  "main": "my-plugin",
+{
+  "name": "pimatic-telegram",
+  "description": "Plugin for sending telegrams",
+  "author": "Danny Wigmans",
+  "license": "GPL-2.0",
+  "main": "telegram.coffee",
   "files": [
-    "my-plugin.coffee",
+    "telegram.coffee",
     "README.md",
-    "my-plugin-config-schema.coffee"
+    "telegram-config-schema.coffee",
+    "LICENSE"
   ],
-  "version": "0.8.0",
-  "homepage": "http://your-plugin-website",
-  "private": true,
+  "version": "1.0.0",
+  "homepage": "https://github.com/SenTzu01/pimatic-telegram",
   "repository": {
     "type": "git",
-    "url": "git://github.com/pimatic/pimatic-plugin-template.git"
+    "url": "git://github.com/SenTzu01/pimatic-telegram.git"
   },
-  "configSchema": "my-plugin-config-schema.coffee",
+  "configSchema": "telegram-config-schema.coffee",
   "dependencies": {
+    "pimatic-plugin-commons": "^0.8.7",
+    "telegram-bot-client": ">=1.4.0"
   },
   "peerDependencies": {
     "pimatic": "0.8.*"

@@ -1,49 +1,64 @@
-# #Plugin template
-
-# This is an plugin template and mini tutorial for creating pimatic plugins. It will explain the 
-# basics of how the plugin system works and how a plugin should look like.
-
-# ##The plugin code
-
-# Your plugin must export a single function, that takes one argument and returns a instance of
-# your plugin class. The parameter is an envirement object containing all pimatic related functions
-# and classes. See the [startup.coffee](http://sweetpi.de/pimatic/docs/startup.html) for details.
 module.exports = (env) ->
 
-  # ###require modules included in pimatic
-  # To require modules that are included in pimatic use `env.require`. For available packages take 
-  # a look at the dependencies section in pimatics package.json
-
-  # Require the  bluebird promise library
   Promise = env.require 'bluebird'
-
-  # Require the [cassert library](https://github.com/rhoot/cassert).
-  assert = env.require 'cassert'
-
-  # Include you own depencies with nodes global require function:
-  #  
-  #     someThing = require 'someThing'
-  #  
-
-  # ###MyPlugin class
-  # Create a class that extends the Plugin class and implements the following functions:
-  class MyPlugin extends env.plugins.Plugin
-
-    # ####init()
-    # The `init` function is called by the framework to ask your plugin to initialise.
-    #  
-    # #####params:
-    #  * `app` is the [express] instance the framework is using.
-    #  * `framework` the framework itself
-    #  * `config` the properties the user specified as config for your plugin in the `plugins` 
-    #     section of the config.json file 
-    #     
-    # 
+  commons = require('pimatic-plugin-commons')(env)
+  TelegramBotClient = require 'telegram-bot-client'
+  M = env.matcher
+    
+  class Telegram extends env.plugins.Plugin
+ 
     init: (app, @framework, @config) =>
-      env.logger.info("Hello World")
+      @framework.ruleManager.addActionProvider(new TelegramActionProvider(@framework, @config))
 
-  # ###Finally
-  # Create a instance of my plugin
-  myPlugin = new MyPlugin
-  # and return it to the framework.
-  return myPlugin
+  plugin = new Telegram()
+  
+  class TelegramActionProvider extends env.actions.ActionProvider
+
+    constructor: (@framework, @config) ->
+
+    parseAction: (input, context) =>
+      retVal = null
+      messageTokens = null
+      fullMatch = no
+
+      setCommand = (m, tokens) => messageTokens = tokens
+      onEnd = => fullMatch = yes
+      
+      m = M(input, context)
+        .match("send telegram ")
+        .matchStringWithVars(setCommand)
+      
+      if m.hadMatch()
+        match = m.getFullMatch()
+        return {
+          token: match
+          nextInput: input.substring(match.length)
+          actionHandler: new TelegramActionHandler(@framework, messageTokens, @config)
+        }
+      else
+        return null
+
+  class TelegramActionHandler extends env.actions.ActionHandler
+
+    constructor: (@framework, @messageTokens, @config) ->
+      @base = commons.base @, "TelegramActionHandler"
+      @host = @config.host
+      @apiToken = @config.apiToken
+      @userChatId = @config.userChatId
+    
+    executeAction: (simulate) =>
+      @framework.variableManager.evaluateStringExpression(@messageTokens).then( (message) =>
+        if simulate
+          return __("would send telegram \"%s\"", message)
+        else
+          return new Promise((resolve, reject) =>
+            client = new TelegramBotClient(@apiToken)    
+            client.sendMessage(@userChatId, message).promise().then ((response) =>
+              resolve __("Telegram \"%s\" to \"%s\" sent", response.result.text, response.result.chat.username)
+            ), (err) =>
+              @base.error __("Sending Telegram \"%s\" failed, reason: %s", message, err)
+          )
+      ).catch( (error) =>
+        @base.rejectWithErrorString Promise.reject, error
+      )
+  return plugin
