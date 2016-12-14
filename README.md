@@ -4,7 +4,6 @@ pimatic-Telegram
 
 Plugin to provide a new rule action: send telegram "message"
 You will need the following:
-- npm-telegram-client
 - A Telegram client (Available for various mobile platforms, as well as webbased (www.telegram.org)
 - A Telegram bot
 - Obtain your chat ID
@@ -34,10 +33,7 @@ Obtain your chatID
 
 Install the plugin
 =======================
-- Go into your node_modules folder, and clone the repository
-- create a node_modules subfolder, cd into it and install the dependencies
--- npm install pimatic-plugin-commons
--- npm install telegram-bot-client
+- Add pimatic-telegram to your pimatic config.json
 - restart Pimatic
 - in the plugin config of Pimatic-Telegram, enter the apiToken and ChatID in the appropriate fields.
 - now you can use the action: send telegram "message" in rules to send messages to your Telegram app !
