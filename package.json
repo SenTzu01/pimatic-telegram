@@ -1,5 +1,5 @@
 {
-  "name": "@sentzu01/pimatic-telegram",
+  "name": "pimatic-telegram",
   "description": "Plugin for sending telegrams",
   "author": "Danny Wigmans",
   "license": "GPL-2.0",
