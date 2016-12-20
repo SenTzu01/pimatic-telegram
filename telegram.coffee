@@ -44,21 +44,33 @@ module.exports = (env) ->
       @base = commons.base @, "TelegramActionHandler"
       @host = @config.host
       @apiToken = @config.apiToken
-      @userChatId = @config.userChatId
-    
+        
+    sendMessage: (message, recipient) =>
+      client = new TelegramBotClient(@apiToken)
+      if recipient.enabled
+        client.sendMessage(recipient.userChatId, message).promise().then ((response) =>
+          env.logger.info __("Telegram \"%s\" to \"%s\" successfully sent", response.result.text, recipient.name)
+          return Promise.resolve
+        ), (err) =>
+          env.logger.error __("Sending Telegram \"%s\" to \"%s\" failed, reason: %s", message, recipient.name, err)
+          error = new Error(message)
+          return Promise.reject error
+
     executeAction: (simulate) =>
       @framework.variableManager.evaluateStringExpression(@messageTokens).then( (message) =>
         if simulate
           return __("would send telegram \"%s\"", message)
         else
           return new Promise((resolve, reject) =>
-            client = new TelegramBotClient(@apiToken)    
-            client.sendMessage(@userChatId, message).promise().then ((response) =>
-              resolve __("Telegram \"%s\" to \"%s\" sent", response.result.text, response.result.chat.username)
-            ), (err) =>
-              @base.error __("Sending Telegram \"%s\" failed, reason: %s", message, err)
+            results = (@sendMessage(message, recipient) for recipient in @config.recipients)
+            Promise.some(results, results.length).then( (result) =>
+              resolve "Message sent to all recipients"
+            ).catch(Promise.AggregateError, (err) =>
+              @base.error "Message was NOT sent to all recipients"
+            )
           )
       ).catch( (error) =>
         @base.rejectWithErrorString Promise.reject, error
       )
+
   return plugin

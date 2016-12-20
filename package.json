@@ -1,7 +1,9 @@
 {
   "name": "pimatic-telegram",
   "description": "Plugin for sending telegrams",
-  "author": "Danny Wigmans",
+  "author": {
+    "name": "Danny Wigmans"
+  },
   "license": "GPL-2.0",
   "main": "telegram.coffee",
   "files": [
@@ -10,7 +12,7 @@
     "telegram-config-schema.coffee",
     "LICENSE"
   ],
-  "version": "1.0.1",
+  "version": "1.0.2",
   "homepage": "https://github.com/SenTzu01/pimatic-telegram",
   "repository": {
     "type": "git",
@@ -34,5 +36,32 @@
   "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
-  }
+  },
+  "gitHead": "3e413c12ecff5505afd0a72c48c88ef8dcbd2995",
+  "_id": "pimatic-telegram@1.0.1",
+  "_shasum": "2dec98ff9dd46bd444d8530f814e2f2fc90250fc",
+  "_from": "pimatic-telegram@1.0.1",
+  "_npmVersion": "2.15.11",
+  "_nodeVersion": "4.6.2",
+  "_npmUser": {
+    "name": "sentzu01",
+    "email": "sentzu01@gmail.com"
+  },
+  "dist": {
+    "shasum": "2dec98ff9dd46bd444d8530f814e2f2fc90250fc",
+    "tarball": "https://registry.npmjs.org/pimatic-telegram/-/pimatic-telegram-1.0.1.tgz"
+  },
+  "maintainers": [
+    {
+      "name": "sentzu01",
+      "email": "sentzu01@gmail.com"
+    }
+  ],
+  "_npmOperationalInternal": {
+    "host": "packages-12-west.internal.npmjs.com",
+    "tmp": "tmp/pimatic-telegram-1.0.1.tgz_1481760134722_0.9052918660454452"
+  },
+  "directories": {},
+  "_resolved": "https://registry.npmjs.org/pimatic-telegram/-/pimatic-telegram-1.0.1.tgz",
+  "readme": "ERROR: No README data found!"
 }
