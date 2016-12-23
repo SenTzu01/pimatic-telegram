@@ -15,35 +15,53 @@ module.exports = (env) ->
   class TelegramActionProvider extends env.actions.ActionProvider
 
     constructor: (@framework, @config) ->
-
     parseAction: (input, context) =>
-      retVal = null
+    
       messageTokens = null
-      fullMatch = no
-
-      setCommand = (m, tokens) => messageTokens = tokens
-      onEnd = => fullMatch = yes
+      match = null
+      @allRecipients = []
+      @msgRecipients = []
+      @more = true
       
-      m = M(input, context)
-        .match("send telegram ")
-        .matchStringWithVars(setCommand)
+      @m = M(input, context).match('send telegram ')
       
-      if m.hadMatch()
-        match = m.getFullMatch()
+      @allRecipients.push (recipient.name + " ") for recipient in @config.recipients
+      i = 0
+      while @more and i < @allRecipients.length # i needed to avoid lockup while editing existing rules, Pimatic bug?
+        next = if @m.getRemainingInput() isnt null then @m.getRemainingInput().charAt(0) else null
+        @more = false if next is '"' or null
+        
+        @m.match(@allRecipients, (@m, r) => #get the recipients names
+          recipient = r.trim()
+          @msgRecipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient objects 
+        )
+        i += 1
+      
+      @m.matchStringWithVars( (@m, message) => #get the message content
+        messageTokens = message
+        match = @m.getFullMatch()
+      )
+         
+      env.logger.info "msgRecipients", @msgRecipients
+      
+      
+      if match?
         return {
           token: match
           nextInput: input.substring(match.length)
-          actionHandler: new TelegramActionHandler(@framework, messageTokens, @config)
+          actionHandler: new TelegramActionHandler(@framework, @msgRecipients, messageTokens, @config)
         }
       else
+      
         return null
 
   class TelegramActionHandler extends env.actions.ActionHandler
 
-    constructor: (@framework, @messageTokens, @config) ->
+    constructor: (@framework, @msgRecipients, @messageTokens, @config) ->
       @base = commons.base @, "TelegramActionHandler"
       @host = @config.host
       @apiToken = @config.apiToken
+      @msgRecipients = @config.recipients if @msgRecipients.length < 1
         
     sendMessage: (message, recipient) =>
       client = new TelegramBotClient(@apiToken)
@@ -61,16 +79,20 @@ module.exports = (env) ->
         if simulate
           return __("would send telegram \"%s\"", message)
         else
+          
           return new Promise((resolve, reject) =>
-            results = (@sendMessage(message, recipient) for recipient in @config.recipients)
+            results = (@sendMessage(message, recipient) for recipient in @msgRecipients)
             Promise.some(results, results.length).then( (result) =>
               resolve "Message sent to all recipients"
             ).catch(Promise.AggregateError, (err) =>
               @base.error "Message was NOT sent to all recipients"
             )
           )
+          
       ).catch( (error) =>
         @base.rejectWithErrorString Promise.reject, error
       )
-
+  
+      
+      
   return plugin
