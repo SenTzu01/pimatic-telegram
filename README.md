@@ -6,7 +6,7 @@ Plugin to provide a new rule action: send telegram "message"
 You will need the following:
 - A Telegram client (Available for various mobile platforms, as well as webbased (www.telegram.org)
 - A Telegram bot
-- Obtain your chat ID
+- Obtain chatID's for all Telegram recipiets you would like to receive messages
 
 Obtain a Telegram client
 =========================
@@ -34,9 +34,12 @@ Obtain your chatID
 Install the plugin
 =======================
 - Add pimatic-telegram to your pimatic config.json
-- restart Pimatic
-- in the plugin config of Pimatic-Telegram, enter the apiToken and ChatID in the appropriate fields.
-- now you can use the action: send telegram "message" in rules to send messages to your Telegram app !
+- Restart Pimatic
+- In the plugin config of Pimatic-Telegram, enter the apiToken
+  - Under recipients add a new recipient and enter name and ChatID in the appropriate fields, check the "enabled"
+ box
+- Restart Pimatic once more
+- Now you can use the action: send telegram "message" in rules to send messages to your Telegram app !
 
 
 
