@@ -3,3 +3,8 @@ doc/*
 .js
 roadmap.txt
 npm-debug.log
+*.multi
+*.single
+*.sav
+*.bak
+*.types

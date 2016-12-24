@@ -6,10 +6,37 @@ module.exports = (env) ->
   M = env.matcher
     
   class Telegram extends env.plugins.Plugin
- 
+    
+    migrateMainChatId: (@framework, @config) =>
+      oldChatId = {
+        name: "MainRecipient"
+        enabled: true
+        
+        oldId: => 
+          id = null
+          if @config.hasOwnProperty('userChatId')
+            id = @config.userChatId
+          return id
+        
+        migrated: =>
+          found = null
+          found = recipient.userChatId for recipient in @config.recipients when recipient.userChatId is @config.userChatId
+          return found
+          
+        migrate: =>
+          if oldChatId.migrated() is null and oldChatId.oldId() isnt null
+            env.logger.info "old userChatId: " + oldChatId.oldId() + " found, migrating..."
+            oldChatId = {name: oldChatId.name, userChatId: oldChatId.oldId(), enabled: oldChatId.enabled}
+            @config.recipients.push oldChatId
+            delete @config.userChatId if @config.hasOwnProperty('userChatId')
+            @framework.pluginManager.updatePluginConfig(@config.plugin, @config)
+      }
+      oldChatId.migrate()
+      
     init: (app, @framework, @config) =>
+      @migrateMainChatId(@framework, @config)
       @framework.ruleManager.addActionProvider(new TelegramActionProvider(@framework, @config))
-
+      
   plugin = new Telegram()
   
   class TelegramActionProvider extends env.actions.ActionProvider
