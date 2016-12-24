@@ -76,5 +76,5 @@ Please check the following first, as all similar issues have been solved so far 
 
 *I upgraded from version 1.0.1 and now messages are no longer sent?
 
-- A change in recipient configuration was made since 1.0.2. You will need to create recipients as outlined in the section "Configuration". The userChatId in the "main" config options is no longer used,i and will be removed in a future version.
+- A change in recipient configuration was made since 1.0.2. You will need to create recipients as outlined in the section "Configuration". The userChatId in the "main" config options is no longer used, and will be removed in a future version.
 Just create a new recipient, and copy the userChatId over, restart Pimatic and Presto !

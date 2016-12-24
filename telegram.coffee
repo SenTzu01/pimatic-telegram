@@ -42,7 +42,7 @@ module.exports = (env) ->
         match = @m.getFullMatch()
       )
          
-      env.logger.info "msgRecipients", @msgRecipients
+      #env.logger.info "msgRecipients", @msgRecipients
       
       
       if match?

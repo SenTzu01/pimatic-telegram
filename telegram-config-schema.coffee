@@ -10,10 +10,6 @@ module.exports = {
       description: "API token for your Bot (Obtained via BotFather)"
       type: "string"
       default: "123456789:ABC1AaBcd12AbBCD1BcCaB012CCCCClAbcA"
-    userChatId:
-      description: "ChatID/UserID of the recipient of messages"
-      type: "string"
-      default: "123456789"
     recipients:
      description: "Additional Telegram recipients"
      type: "array"
