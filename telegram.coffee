@@ -47,7 +47,6 @@ module.exports = (env) ->
     constructor: (@framework, @config) ->
     
     parseAction: (input, context) =>
-      #messageTokens = null
       match = null
       @allRecipients = []
       @msgRecipients = []
@@ -64,10 +63,10 @@ module.exports = (env) ->
       
       @m = M(input, context).match('send telegram ')
       @m.match(MessageFactory.getTypes().map( (t) => t + " "), optional: yes, (@m, content) => # add content type, eg video, photo, text, if none provided default to text
-        env.logger.info "'",content,"'"
         @message.type = content.trim() if content isnt null
         
       )
+      
       
       @allRecipients.push (recipient.name + " ") for recipient in @config.recipients
       i = 0
@@ -113,9 +112,8 @@ module.exports = (env) ->
           new Content(@framework, @message.content).then( (c) =>
             @recipients.map( (r) => @sendMessage(r, c))
           ).then( (results) =>
-            #env.logger.info "5. results: ", results
             Promise.some(results, results.length).then( (result) =>
-              resolve "6. Message sent to all recipients"
+              resolve "Message sent to all recipients"
             ).catch(Promise.AggregateError, (err) =>
               @base.error "Message was NOT sent to all recipients"
             )
@@ -147,19 +145,10 @@ module.exports = (env) ->
   
     send: (@recipient, @content) =>
       if @recipient.enabled
-        #env.logger.info "2. @recipient is enabled, continue..."
-        #env.logger.info "3. @recipinet.userChatId: ", @recipient.userChatId, " @content: ", @content.get()
-        
         @client.sendMessage(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          #env.logger.info __("4. Telegram \"%s\" to \"%s\" successfully sent", response.result.text, @recipient.name)
           return Promise.resolve env.logger.info __("Telegram \"%s\" to \"%s\" successfully sent", response.result.text, @recipient.name)
         ), (err) =>
-          
-          error = new Error(@content.get())
           return Promise.reject env.logger.error __("Sending Telegram \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
-      #else
-      #  env.logger.info "recipient is disabled"
-      #  resolve "Message was not sent to user: ", @recipient.name, " reason: recipient disabled"
       
   ###
   # VideoMessage Class
@@ -171,21 +160,40 @@ module.exports = (env) ->
     
     send: (@recipient, @content) =>
       if @recipient.enabled
-        #env.logger.info "2. @recipient is enabled, continue..."
-        #env.logger.info "3. @recipinet.userChatId: ", @recipient.userChatId, " @content: ", @content.get()
-        
         @client.sendVideo(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          #env.logger.info __("4. Telegram \"%s\" to \"%s\" successfully sent", response.result.text, @recipient.name)
           return Promise.resolve env.logger.info __("Telegram \"%s\" to \"%s\" successfully sent", response.result.text, @recipient.name)
         ), (err) =>
-          
-          error = new Error(@content.get())
           return Promise.reject env.logger.error __("Sending Telegram \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
-      #else
-      #  env.logger.info "recipient is disabled"
-      #  resolve "Message was not sent to user: ", @recipient.name, " reason: recipient disabled"
   
+  ###
+  # AudioMessage Class
+  #  
+  # .send (recipient: Recipient object, message: Content object) => (Promise.reject, Promise.resolve)
+  #
+  ###
+  class AudioMessage extends BotClient
+    
+    send: (@recipient, @content) =>
+      if @recipient.enabled
+        @client.sendAudio(@recipient.userChatId, @content.get()).promise().then ((response) =>
+          return Promise.resolve env.logger.info __("Telegram \"%s\" to \"%s\" successfully sent", response.result.text, @recipient.name)
+        ), (err) =>
+          return Promise.reject env.logger.error __("Sending Telegram \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
+  ###
+  # PhotoMessage Class
+  #  
+  # .send (recipient: Recipient object, message: Content object) => (Promise.reject, Promise.resolve)
+  #
+  ###
   
+  class PhotoMessage extends BotClient
+    
+    send: (@recipient, @content) =>
+      if @recipient.enabled
+        @client.sendPhoto(@recipient.userChatId, @content.get()).promise().then ((response) =>
+          return Promise.resolve env.logger.info __("Telegram \"%s\" to \"%s\" successfully sent", response.result.text, @recipient.name)
+        ), (err) =>
+          return Promise.reject env.logger.error __("Sending Telegram \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
   
   ###
   #
@@ -199,12 +207,13 @@ module.exports = (env) ->
     types = {
       text: TextMessage
       video: VideoMessage
+      audio: AudioMessage
+      photo: PhotoMessage
     }
     
     @getTypes: -> return Object.keys(types)
     
     constructor: (type, args) ->
-      #env.logger.info classes
       return new types[type] args
   
   ###
@@ -219,7 +228,6 @@ module.exports = (env) ->
   class Recipient
     
     constructor: (@name, @id, @enabled) ->
-      #env.logger.info "In Recipient class, @name: ", name, " @id: ", @id, " @enabled: ", @enabled
     getId: () =>
       env.logger.info "@id: ", @id
       return @id
@@ -243,7 +251,6 @@ module.exports = (env) ->
     
     constructor: (@framework, @input) ->
       return new Promise((resolve, reject) =>
-        #env.logger.info "1. in Content cnstructor, @input: ", @input
         @base = commons.base @, "TelegramActionHandler"
         @output = " not set"
         @parse(@input)
@@ -252,22 +259,15 @@ module.exports = (env) ->
         reject "Failed to return Content object"
       )
     get: () =>
-      #env.logger.info "@output: ", @output
       return @output
       
       
     parse: (input) =>
-      #return new Promise((resolve, reject) =>
-        #env.logger.info "right before parse, input: ", input
         @framework.variableManager.evaluateStringExpression(input).then( (message) =>
-          #env.logger.info "message: ", message
           @output = message
-          #env.logger.info "Message parsed with success"
           return "Message parsed with success"
         ).catch( (error) =>
-          #env.logger.info "Message parse failure"
           @base.rejectWithErrorString Promise.reject, error
         )
-      #)
       
   return plugin
