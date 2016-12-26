@@ -48,8 +48,8 @@ module.exports = (env) ->
     
     parseAction: (input, context) =>
       match = null
-      @allRecipients = []
-      @msgRecipients = []
+      allRecipients = []
+      msgRecipients = []
       @more = true
       
       @message = {
@@ -68,15 +68,15 @@ module.exports = (env) ->
       )
       
       
-      @allRecipients.push (recipient.name + " ") for recipient in @config.recipients
+      allRecipients.push (recipient.name + " ") for recipient in @config.recipients
       i = 0
-      while @more and i < @allRecipients.length # i needed to avoid lockup while editing existing rules, Pimatic bug?
+      while @more and i < allRecipients.length # i needed to avoid lockup while editing existing rules, Pimatic bug?
         next = if @m.getRemainingInput() isnt null then @m.getRemainingInput().charAt(0) else null
         @more = false if next is '"' or null
         
-        @m.match(@allRecipients, (@m, r) => #get the recipients names
+        @m.match(allRecipients, (@m, r) => #get the recipients names
           recipient = r.trim()
-          @msgRecipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient objects 
+          @message.recipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient objects 
         )
         i += 1
       
@@ -100,7 +100,7 @@ module.exports = (env) ->
       @base = commons.base @, "TelegramActionHandler"
       @host = @config.host
       @apiToken = @config.apiToken
-      @recipients = @config.recipients if @message.recipients.length < 1
+      @recipients = if @message.recipients.length > 0 then @message.recipients else @config.recipients
     
     executeAction: (simulate) =>
       if simulate
@@ -161,7 +161,6 @@ module.exports = (env) ->
     send: (@recipient, @content) =>
       if @recipient.enabled
         @client.sendVideo(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          env.logger.info response
           return Promise.resolve env.logger.info __("Telegram video \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
         ), (err) =>
           return Promise.reject env.logger.error __("Sending Telegram video \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
