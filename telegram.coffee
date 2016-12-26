@@ -146,9 +146,9 @@ module.exports = (env) ->
     send: (@recipient, @content) =>
       if @recipient.enabled
         @client.sendMessage(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          return Promise.resolve env.logger.info __("Telegram \"%s\" to \"%s\" successfully sent", response.result.text, @recipient.name)
+          return Promise.resolve env.logger.info __("Telegram text \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
         ), (err) =>
-          return Promise.reject env.logger.error __("Sending Telegram \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
+          return Promise.reject env.logger.error __("Sending Telegram text \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
       
   ###
   # VideoMessage Class
@@ -161,9 +161,10 @@ module.exports = (env) ->
     send: (@recipient, @content) =>
       if @recipient.enabled
         @client.sendVideo(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          return Promise.resolve env.logger.info __("Telegram \"%s\" to \"%s\" successfully sent", response.result.text, @recipient.name)
+          env.logger.info response
+          return Promise.resolve env.logger.info __("Telegram video \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
         ), (err) =>
-          return Promise.reject env.logger.error __("Sending Telegram \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
+          return Promise.reject env.logger.error __("Sending Telegram video \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
   
   ###
   # AudioMessage Class
@@ -176,9 +177,9 @@ module.exports = (env) ->
     send: (@recipient, @content) =>
       if @recipient.enabled
         @client.sendAudio(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          return Promise.resolve env.logger.info __("Telegram \"%s\" to \"%s\" successfully sent", response.result.text, @recipient.name)
+          return Promise.resolve env.logger.info __("Telegram audio \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
         ), (err) =>
-          return Promise.reject env.logger.error __("Sending Telegram \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
+          return Promise.reject env.logger.error __("Sending Telegram audio \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
   ###
   # PhotoMessage Class
   #  
@@ -191,9 +192,9 @@ module.exports = (env) ->
     send: (@recipient, @content) =>
       if @recipient.enabled
         @client.sendPhoto(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          return Promise.resolve env.logger.info __("Telegram \"%s\" to \"%s\" successfully sent", response.result.text, @recipient.name)
+          return Promise.resolve env.logger.info __("Telegram photo \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
         ), (err) =>
-          return Promise.reject env.logger.error __("Sending Telegram \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
+          return Promise.reject env.logger.error __("Sending Telegram photo \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
   
   ###
   #
@@ -260,7 +261,6 @@ module.exports = (env) ->
       )
     get: () =>
       return @output
-      
       
     parse: (input) =>
         @framework.variableManager.evaluateStringExpression(input).then( (message) =>
