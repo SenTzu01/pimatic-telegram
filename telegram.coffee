@@ -45,97 +45,76 @@ module.exports = (env) ->
   class TelegramActionProvider extends env.actions.ActionProvider
     
     constructor: (@framework, @config) ->
-      
-    matchRecipients: () =>
-      @more = true
-      allRecipients = @config.recipients.map( (r) => r.name + " ")
-      i = 0
-      while @more and i < allRecipients.length # i needed to avoid lockup while editing existing rules, Pimatic bug?
-        next = if @m.getRemainingInput() isnt null then @m.getRemainingInput().charAt(0) else null
-        @more = false if next is '"' or null
-        
-        @m.match(allRecipients, (@m, r) => #get the recipients names
-          recipient = r.trim()
-          @message.recipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient objects 
-          #@message.recipients = @config.recipients.map( (cr, r) => return cr if cr.name is recipient)
-        )
-        i += 1
     
     parseAction: (input, context) =>
       match = null
-      allRecipients = []
-      msgRecipients = []
-      @more = true
-      
-      @message = {
+      message = {
         type: "text"    # content type, e.g. video, photo, audio, text
         recipients: []  # array of intented recipients coming from rules
         content: null
       }
       
-      # final state: send [telegram] | [text | video | audio | photo] telegram] [[to] recipient1 ... recipientn] "message | path | url" [[to] recipient1 ... recipient] => defaults to text
-      # current state: send [text | video | audio | photo] telegram [[to] recipient1 ... recipientn] "message | path | url"
-      
-      allRecipients = @config.recipients.map( (r) => r.name + ' ')
-      @m = M(input, context)
-      @m.or([
+      # Action arguments: send [[telegram] | [text(default) | video | audio | photo] telegram to ]] [1strecipient1 ... Nthrecipient] "message | path | url"
+      @m1 = null
+      @m2 = null
+      m = M(input, context)
+      m.or([
         ( (@m1) =>
-          # ### Scenario 1
+          # Legacy Action maycher, remove in future version
+          #
+          # Action arguments: send telegram [1strecipient1 ... Nthrecipient] "message"
           @m1.match('send telegram ', (@m1) =>
+            
             i = 0
-            while @more and i < allRecipients.length # i needed to avoid lockup while editing existing rules, Pimatic bug?
-              next = if @m1.getRemainingInput() isnt null then @m1.getRemainingInput().charAt(0) else null
-              @more = false if next is '"' or null
+            more = true
+            all = @config.recipients.map( (r) => r.name + ' ')
+            while more and i < all.length
+              more = false if @m1.getRemainingInput().charAt(0) is '"' or null
           
-              @m1.match(allRecipients, (@m1, r) => #get the recipients names
+              @m1.match(all, (@m1, r) => #get the recipients names
                 recipient = r.trim()
-                @message.recipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient objects
+                message.recipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient objects
               )
               i += 1
           )
-          @m1.matchStringWithVars( (@m1, message) => #get the message content
-            @message.content = message
+          @m1.matchStringWithVars( (@m1, content) => #get the message content
+            message.content = content
             match = @m1.getFullMatch()
           )
         ),
         ( (@m2) =>
-          env.logger.info 'in m2, starting: ', @m2
+          # New style Action matcher
+          #
+          # Action arguments: send [[telegram] | [text(default) | video | audio | photo] telegram to ]] [1strecipient1 ... Nthrecipient] "message | path | url"
           @m2.match('send ')
-            .match(MessageFactory.getTypes().map( (t) => t + ' '), (@m2, type) => @message.type = type.trim())
+            .match(MessageFactory.getTypes().map( (t) => t + ' '), (@m2, type) => message.type = type.trim())
             .match('telegram ')
             .match('to ', optional: yes, (@m2) =>
-              env.logger.info 'after telegram to: ', @m2
+            
               i = 0
-              @more = true
-              while @more and i < allRecipients.length # i needed to avoid lockup while editing existing rules, Pimatic bug?
-                env.logger.info 'in while loop: ', @m2
-                next = if @m2.getRemainingInput() isnt null then @m2.getRemainingInput().charAt(0) else null
-                @more = false if next is '"' or null
+              more = true
+              all = @config.recipients.map( (r) => r.name + ' ')
+              while more and i < all.length
+                more = false if @m1.getRemainingInput().charAt(0) is '"' or null
                  
-                @m2.match(allRecipients, (@m2, r) => #get the recipients names
-                  env.logger.info 'before matchin recipients: ',@m2
+                @m2.match(all, (@m2, r) => #get the recipients names
                   recipient = r.trim()
-                  @message.recipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient objects 
-                  #@message.recipients = @config.recipients.map( (cr, r) => return cr if cr.name is recipient)
+                  message.recipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient object
                 )
                 i += 1
-              #return @m2
             )
-          @m2.matchStringWithVars( (@m2, message) => #get the message content
-            env.logger.info 'in string matcher: ',@m2
-            @message.content = message
+          @m2.matchStringWithVars( (@m2, content) => #get the message content
+            message.content = content
             match = @m2.getFullMatch()
           )
         )
       ])
       
-      
-      
       if match?
         return {
           token: match
           nextInput: input.substring(match.length)
-          actionHandler: new TelegramActionHandler(@framework, @config, @message)
+          actionHandler: new TelegramActionHandler(@framework, @config, message)
         }
       else    
         return null
@@ -192,9 +171,9 @@ module.exports = (env) ->
   
     send: (@recipient, @content) =>
         @client.sendMessage(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          return Promise.resolve env.logger.info __("Telegram text \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.userChatId)
+          return Promise.resolve env.logger.info __("Telegram text \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
         ), (err) =>
-          return Promise.reject env.logger.error __("Sending Telegram text \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.userChatId, err)
+          return Promise.reject env.logger.error __("Sending Telegram text \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
       
   ###
   # VideoMessage Class
@@ -206,9 +185,9 @@ module.exports = (env) ->
     
     send: (@recipient, @content) =>
         @client.sendVideo(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          return Promise.resolve env.logger.info __("Telegram video \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.userChatId)
+          return Promise.resolve env.logger.info __("Telegram video \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
         ), (err) =>
-          return Promise.reject env.logger.error __("Sending Telegram video \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.userChatId, err)
+          return Promise.reject env.logger.error __("Sending Telegram video \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
   
   ###
   # AudioMessage Class
@@ -220,9 +199,9 @@ module.exports = (env) ->
     
     send: (@recipient, @content) =>
         @client.sendAudio(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          return Promise.resolve env.logger.info __("Telegram audio \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.userChatId)
+          return Promise.resolve env.logger.info __("Telegram audio \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
         ), (err) =>
-          return Promise.reject env.logger.error __("Sending Telegram audio \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.userChatId, err)
+          return Promise.reject env.logger.error __("Sending Telegram audio \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
   ###
   # PhotoMessage Class
   #  
