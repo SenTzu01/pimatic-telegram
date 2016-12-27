@@ -59,27 +59,50 @@ module.exports = (env) ->
       }
       
       # final state: send [text | video | audio | photo] telegram [[to] recipient1 ... recipientn] "message | path | url" [[to] recipient1 ... recipient] => defaults to text
-      # current state: send telegram [text | video] [recipient1 ... recipientn] "message | path | url"
+      # current state: send [text | video | audio | photo] telegram [[to] recipient1 ... recipientn] "message | path | url"
       
-      @m = M(input, context).match('send telegram ')
-      @m.match(MessageFactory.getTypes().map( (t) => t + " "), optional: yes, (@m, content) => # add content type, eg video, photo, text, if none provided default to text
-        @message.type = content.trim() if content isnt null
-        
+      @m = M(input, context)
+      allRecipients = @config.recipients.map( (r) => r.name + " ")
+      
+      # ### Scenario 1
+      @m.match('send telegram ', (@m) =>
+      
+        i = 0
+        while @more and i < allRecipients.length # i needed to avoid lockup while editing existing rules, Pimatic bug?
+          next = if @m.getRemainingInput() isnt null then @m.getRemainingInput().charAt(0) else null
+          @more = false if next is '"' or null
+          
+          @m.match(allRecipients, (@m, r) => #get the recipients names
+            recipient = r.trim()
+            @message.recipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient objects 
+            #@message.recipients = @config.recipients.map( (cr, r) => return cr if cr.name is recipient)
+          )
+          i += 1
+      )
+      @m.matchStringWithVars( (@m, message) => #get the message content
+        @message.content = message
+        match = @m.getFullMatch()
       )
       
+      # ### Scenario 2
+      @m.match('send ').match(MessageFactory.getTypes().map( (t) => t + " "), optional: yes, (@m, type) => # add content type, eg video, photo, text, if none provided default to text
+        @message.type = type.trim() if type isnt null
+      )
+      @m.match('telegram ').match('to ', (@m) =>
       
-      allRecipients.push (recipient.name + " ") for recipient in @config.recipients
-      i = 0
-      while @more and i < allRecipients.length # i needed to avoid lockup while editing existing rules, Pimatic bug?
-        next = if @m.getRemainingInput() isnt null then @m.getRemainingInput().charAt(0) else null
-        @more = false if next is '"' or null
-        
-        @m.match(allRecipients, (@m, r) => #get the recipients names
-          recipient = r.trim()
-          @message.recipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient objects 
-        )
-        i += 1
-      
+        i = 0
+        while @more and i < allRecipients.length # i needed to avoid lockup while editing existing rules, Pimatic bug?
+          next = if @m.getRemainingInput() isnt null then @m.getRemainingInput().charAt(0) else null
+          @more = false if next is '"' or null
+          
+          @m.match(allRecipients, (@m, r) => #get the recipients names
+            recipient = r.trim()
+            @message.recipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient objects 
+            #@message.recipients = @config.recipients.map( (cr, r) => return cr if cr.name is recipient)
+            #env.logger.info @message.recipients
+          )
+          i += 1
+      )
       @m.matchStringWithVars( (@m, message) => #get the message content
         @message.content = message
         match = @m.getFullMatch()
@@ -101,7 +124,7 @@ module.exports = (env) ->
       @host = @config.host
       @apiToken = @config.apiToken
       @recipients = if @message.recipients.length > 0 then @message.recipients else @config.recipients
-    
+      
     executeAction: (simulate) =>
       if simulate
         c = new Content(@framework, @message.content)
@@ -113,7 +136,7 @@ module.exports = (env) ->
             @recipients.map( (r) => @sendMessage(r, c))
           ).then( (results) =>
             Promise.some(results, results.length).then( (result) =>
-              resolve "Message sent to all recipients"
+              resolve
             ).catch(Promise.AggregateError, (err) =>
               @base.error "Message was NOT sent to all recipients"
             )
@@ -121,8 +144,9 @@ module.exports = (env) ->
         )
         
     sendMessage: (recipient, content) =>
-        type = new MessageFactory(@message.type, @apiToken)
-        return type.send(recipient, content)
+      if recipient.enabled
+        messageHandler = new MessageFactory(@message.type, @apiToken)
+        return messageHandler.send(recipient, content)
   
   ###
   # BotClient SuperClass
@@ -144,11 +168,10 @@ module.exports = (env) ->
   class TextMessage extends BotClient
   
     send: (@recipient, @content) =>
-      if @recipient.enabled
         @client.sendMessage(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          return Promise.resolve env.logger.info __("Telegram text \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
+          return Promise.resolve env.logger.info __("Telegram text \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.userChatId)
         ), (err) =>
-          return Promise.reject env.logger.error __("Sending Telegram text \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
+          return Promise.reject env.logger.error __("Sending Telegram text \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.userChatId, err)
       
   ###
   # VideoMessage Class
@@ -159,11 +182,10 @@ module.exports = (env) ->
   class VideoMessage extends BotClient
     
     send: (@recipient, @content) =>
-      if @recipient.enabled
         @client.sendVideo(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          return Promise.resolve env.logger.info __("Telegram video \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
+          return Promise.resolve env.logger.info __("Telegram video \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.userChatId)
         ), (err) =>
-          return Promise.reject env.logger.error __("Sending Telegram video \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
+          return Promise.reject env.logger.error __("Sending Telegram video \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.userChatId, err)
   
   ###
   # AudioMessage Class
@@ -174,26 +196,23 @@ module.exports = (env) ->
   class AudioMessage extends BotClient
     
     send: (@recipient, @content) =>
-      if @recipient.enabled
         @client.sendAudio(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          return Promise.resolve env.logger.info __("Telegram audio \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
+          return Promise.resolve env.logger.info __("Telegram audio \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.userChatId)
         ), (err) =>
-          return Promise.reject env.logger.error __("Sending Telegram audio \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
+          return Promise.reject env.logger.error __("Sending Telegram audio \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.userChatId, err)
   ###
   # PhotoMessage Class
   #  
   # .send (recipient: Recipient object, message: Content object) => (Promise.reject, Promise.resolve)
   #
   ###
-  
   class PhotoMessage extends BotClient
     
     send: (@recipient, @content) =>
-      if @recipient.enabled
         @client.sendPhoto(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          return Promise.resolve env.logger.info __("Telegram photo \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
+          return Promise.resolve env.logger.info __("Telegram photo \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.userChatId)
         ), (err) =>
-          return Promise.reject env.logger.error __("Sending Telegram photo \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
+          return Promise.reject env.logger.error __("Sending photo text \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.userChatId, err)
   
   ###
   #
@@ -227,7 +246,12 @@ module.exports = (env) ->
   ###
   class Recipient
     
-    constructor: (@name, @id, @enabled) ->
+    constructor: (@name, @id, @enabled = false) ->
+      return new Promise((resolve, reject) =>
+        resolve @ 
+      ).catch( (err) =>
+        reject "Failed to return Content object"
+      )
     getId: () =>
       env.logger.info "@id: ", @id
       return @id
@@ -252,7 +276,7 @@ module.exports = (env) ->
     constructor: (@framework, @input) ->
       return new Promise((resolve, reject) =>
         @base = commons.base @, "TelegramActionHandler"
-        @output = " not set"
+        @output = "not set"
         @parse(@input)
         resolve @ 
       ).catch( (err) =>
@@ -261,8 +285,9 @@ module.exports = (env) ->
     get: () =>
       return @output
       
-    parse: (input) =>
-        @framework.variableManager.evaluateStringExpression(input).then( (message) =>
+    parse: (@input) =>
+        @framework.variableManager.evaluateStringExpression(@input).then( (message) =>
+          env.logger.info "message: '", message, "'"
           @output = message
           return "Message parsed with success"
         ).catch( (error) =>
