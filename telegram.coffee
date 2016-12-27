@@ -167,55 +167,56 @@ module.exports = (env) ->
   # .send (recipient: Recipient object, message: Content object) => (Promise.reject, Promise.resolve)
   #
   ####
-  class TextMessage extends BotClient
+  class Message extends BotClient
   
-    send: (@recipient, @content) =>
-        @client.sendMessage(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          return Promise.resolve env.logger.info __("Telegram text \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
+    getResults: (result) =>
+        result.then ((response) =>
+          return Promise.resolve env.logger.info __("Telegram \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
         ), (err) =>
-          return Promise.reject env.logger.error __("Sending Telegram text \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
-      
+          return Promise.reject env.logger.error __("Sending Telegram \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
+  
+  ###
+  # TextMessage Class
+  #
+  # .send (recipient: Recipient object, message: Content object) => (Promise.reject, Promise.resolve)
+  #
+  ####
+  class TextMessage extends Message
+    
+    send: (@recipient, @content) =>
+      @getResults(@client.sendMessage(@recipient.userChatId, @content.get()).promise())
+     
   ###
   # VideoMessage Class
   #  
   # .send (recipient: Recipient object, message: Content object) => (Promise.reject, Promise.resolve)
   #
   ###
-  class VideoMessage extends BotClient
+  class VideoMessage extends Message
     
     send: (@recipient, @content) =>
-        @client.sendVideo(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          return Promise.resolve env.logger.info __("Telegram video \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
-        ), (err) =>
-          return Promise.reject env.logger.error __("Sending Telegram video \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
-  
+      env.logger.info " video file is: '", @content.get(),"'" 
+      @getResults(@client.sendVideo(@recipient.userChatId, @content.get().trim()).promise())
   ###
   # AudioMessage Class
   #  
   # .send (recipient: Recipient object, message: Content object) => (Promise.reject, Promise.resolve)
   #
   ###
-  class AudioMessage extends BotClient
+  class AudioMessage extends Message
     
     send: (@recipient, @content) =>
-        @client.sendAudio(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          return Promise.resolve env.logger.info __("Telegram audio \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
-        ), (err) =>
-          return Promise.reject env.logger.error __("Sending Telegram audio \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
+      @getResults(@client.sendAudio(@recipient.userChatId, @content.get()).promise())
   ###
   # PhotoMessage Class
   #  
   # .send (recipient: Recipient object, message: Content object) => (Promise.reject, Promise.resolve)
   #
   ###
-  class PhotoMessage extends BotClient
+  class PhotoMessage extends Message
     
     send: (@recipient, @content) =>
-        @client.sendPhoto(@recipient.userChatId, @content.get()).promise().then ((response) =>
-          return Promise.resolve env.logger.info __("Telegram photo \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.userChatId)
-        ), (err) =>
-          return Promise.reject env.logger.error __("Sending photo text \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.userChatId, err)
-  
+      @getResults(@client.sendPhoto(@recipient.userChatId, @content.get()).promise())  
   ###
   #
   # MessageFactory FactoryClass
@@ -291,7 +292,7 @@ module.exports = (env) ->
         @framework.variableManager.evaluateStringExpression(@input).then( (message) =>
           env.logger.info "message: '", message, "'"
           @output = message
-          return "Message parsed with success"
+          Promise.resolve
         ).catch( (error) =>
           @base.rejectWithErrorString Promise.reject, error
         )
