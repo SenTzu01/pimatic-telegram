@@ -45,6 +45,21 @@ module.exports = (env) ->
   class TelegramActionProvider extends env.actions.ActionProvider
     
     constructor: (@framework, @config) ->
+      
+    matchRecipients: () =>
+      @more = true
+      allRecipients = @config.recipients.map( (r) => r.name + " ")
+      i = 0
+      while @more and i < allRecipients.length # i needed to avoid lockup while editing existing rules, Pimatic bug?
+        next = if @m.getRemainingInput() isnt null then @m.getRemainingInput().charAt(0) else null
+        @more = false if next is '"' or null
+        
+        @m.match(allRecipients, (@m, r) => #get the recipients names
+          recipient = r.trim()
+          @message.recipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient objects 
+          #@message.recipients = @config.recipients.map( (cr, r) => return cr if cr.name is recipient)
+        )
+        i += 1
     
     parseAction: (input, context) =>
       match = null
@@ -58,55 +73,63 @@ module.exports = (env) ->
         content: null
       }
       
-      # final state: send [text | video | audio | photo] telegram [[to] recipient1 ... recipientn] "message | path | url" [[to] recipient1 ... recipient] => defaults to text
+      # final state: send [telegram] | [text | video | audio | photo] telegram] [[to] recipient1 ... recipientn] "message | path | url" [[to] recipient1 ... recipient] => defaults to text
       # current state: send [text | video | audio | photo] telegram [[to] recipient1 ... recipientn] "message | path | url"
       
+      allRecipients = @config.recipients.map( (r) => r.name + ' ')
       @m = M(input, context)
-      allRecipients = @config.recipients.map( (r) => r.name + " ")
-      
-      # ### Scenario 1
-      @m.match('send telegram ', (@m) =>
-      
-        i = 0
-        while @more and i < allRecipients.length # i needed to avoid lockup while editing existing rules, Pimatic bug?
-          next = if @m.getRemainingInput() isnt null then @m.getRemainingInput().charAt(0) else null
-          @more = false if next is '"' or null
+      @m.or([
+        ( (@m1) =>
+          # ### Scenario 1
+          @m1.match('send telegram ', (@m1) =>
+            i = 0
+            while @more and i < allRecipients.length # i needed to avoid lockup while editing existing rules, Pimatic bug?
+              next = if @m1.getRemainingInput() isnt null then @m1.getRemainingInput().charAt(0) else null
+              @more = false if next is '"' or null
           
-          @m.match(allRecipients, (@m, r) => #get the recipients names
-            recipient = r.trim()
-            @message.recipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient objects 
-            #@message.recipients = @config.recipients.map( (cr, r) => return cr if cr.name is recipient)
+              @m1.match(allRecipients, (@m1, r) => #get the recipients names
+                recipient = r.trim()
+                @message.recipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient objects
+              )
+              i += 1
           )
-          i += 1
-      )
-      @m.matchStringWithVars( (@m, message) => #get the message content
-        @message.content = message
-        match = @m.getFullMatch()
-      )
-      
-      # ### Scenario 2
-      @m.match('send ').match(MessageFactory.getTypes().map( (t) => t + " "), optional: yes, (@m, type) => # add content type, eg video, photo, text, if none provided default to text
-        @message.type = type.trim() if type isnt null
-      )
-      @m.match('telegram ').match('to ', (@m) =>
-      
-        i = 0
-        while @more and i < allRecipients.length # i needed to avoid lockup while editing existing rules, Pimatic bug?
-          next = if @m.getRemainingInput() isnt null then @m.getRemainingInput().charAt(0) else null
-          @more = false if next is '"' or null
-          
-          @m.match(allRecipients, (@m, r) => #get the recipients names
-            recipient = r.trim()
-            @message.recipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient objects 
-            #@message.recipients = @config.recipients.map( (cr, r) => return cr if cr.name is recipient)
-            #env.logger.info @message.recipients
+          @m1.matchStringWithVars( (@m1, message) => #get the message content
+            @message.content = message
+            match = @m1.getFullMatch()
           )
-          i += 1
-      )
-      @m.matchStringWithVars( (@m, message) => #get the message content
-        @message.content = message
-        match = @m.getFullMatch()
-      )
+        ),
+        ( (@m2) =>
+          env.logger.info 'in m2, starting: ', @m2
+          @m2.match('send ')
+            .match(MessageFactory.getTypes().map( (t) => t + ' '), (@m2, type) => @message.type = type.trim())
+            .match('telegram ')
+            .match('to ', optional: yes, (@m2) =>
+              env.logger.info 'after telegram to: ', @m2
+              i = 0
+              @more = true
+              while @more and i < allRecipients.length # i needed to avoid lockup while editing existing rules, Pimatic bug?
+                env.logger.info 'in while loop: ', @m2
+                next = if @m2.getRemainingInput() isnt null then @m2.getRemainingInput().charAt(0) else null
+                @more = false if next is '"' or null
+                 
+                @m2.match(allRecipients, (@m2, r) => #get the recipients names
+                  env.logger.info 'before matchin recipients: ',@m2
+                  recipient = r.trim()
+                  @message.recipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient objects 
+                  #@message.recipients = @config.recipients.map( (cr, r) => return cr if cr.name is recipient)
+                )
+                i += 1
+              #return @m2
+            )
+          @m2.matchStringWithVars( (@m2, message) => #get the message content
+            env.logger.info 'in string matcher: ',@m2
+            @message.content = message
+            match = @m2.getFullMatch()
+          )
+        )
+      ])
+      
+      
       
       if match?
         return {
