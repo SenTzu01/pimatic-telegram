@@ -10,7 +10,7 @@ module.exports = (env) ->
   
   class Telegram extends env.plugins.Plugin
     
-     migrateMainChatId: (@framework, @config) =>
+    migrateMainChatId: (@framework, @config) =>
       oldChatId = {
         name: "MainRecipient"
         enabled: true
