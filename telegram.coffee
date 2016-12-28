@@ -3,11 +3,10 @@ module.exports = (env) ->
   Promise = env.require 'bluebird'
   commons = require('pimatic-plugin-commons')(env)
   TelegramBotClient = require 'telegram-bot-client'
+
   fs = require('fs')
   M = env.matcher
 
-
-  
   class Telegram extends env.plugins.Plugin
     
     migrateMainChatId: (@framework, @config) =>
@@ -15,21 +14,27 @@ module.exports = (env) ->
       oldChatId = {
         name: "MainRecipient"
         enabled: true
+
         oldId: => 
           id = null
           if @config.hasOwnProperty('userChatId')
             id = @config.userChatId
           return id
+        
         migrated: =>
           found = null
           found = recipient.userChatId for recipient in @config.recipients when recipient.userChatId is @config.userChatId
           return found
+
+          
         migrate: =>
-          if oldChatId.migrated() is null and oldChatId.oldId() isnt null
-            env.logger.info "old userChatId: " + oldChatId.oldId() + " found, migrating..."
-            oldChatId = {name: oldChatId.name, userChatId: oldChatId.oldId(), enabled: oldChatId.enabled}
-            @config.recipients.push oldChatId
-            delete @config.userChatId if @config.hasOwnProperty('userChatId')
+          if oldChatId.oldId() isnt null
+            if oldChatId.migrated() is null
+              env.logger.info "old userChatId: " + oldChatId.oldId() + " found, migrating..."
+              oldChatId = {name: oldChatId.name, userChatId: oldChatId.oldId(), enabled: oldChatId.enabled}
+              @config.recipients.push oldChatId
+            delete @config.userChatId
+
             @framework.pluginManager.updatePluginConfig(@config.plugin, @config)
       }
       oldChatId.migrate()
@@ -37,13 +42,16 @@ module.exports = (env) ->
     init: (app, @framework, @config) =>
       @migrateMainChatId(@framework, @config)
       @framework.ruleManager.addActionProvider(new TelegramActionProvider(@framework, @config))
+
     
     getConfig: =>
       return @config
+
       
   plugin = new Telegram()
   
   class TelegramActionProvider extends env.actions.ActionProvider
+
     
     constructor: (@framework, @config) ->
     
@@ -96,7 +104,7 @@ module.exports = (env) ->
               all = @config.recipients.map( (r) => r.name + ' ')
               while more and i < all.length
                 more = false if @m1.getRemainingInput().charAt(0) is '"' or null
-                 
+
                 @m2.match(all, (@m2, r) =>
                   recipient = r.trim()
                   message.recipients.push obj for obj in @config.recipients when obj.name is recipient
@@ -109,11 +117,13 @@ module.exports = (env) ->
           )
         )
       ])
+
       
       if match?
         return {
           token: match
           nextInput: input.substring(match.length)
+
           actionHandler: new TelegramActionHandler(@framework, @config, message)
         }
       else    
@@ -306,4 +316,5 @@ module.exports = (env) ->
         @base.rejectWithErrorString Promise.reject, error
       )
         
+
   return plugin

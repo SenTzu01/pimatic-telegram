@@ -10,7 +10,7 @@
     "telegram-config-schema.coffee",
     "LICENSE"
   ],
-  "version": "1.0.7",
+  "version": "1.0.7"
   "homepage": "https://github.com/SenTzu01/pimatic-telegram",
   "repository": {
     "type": "git",
