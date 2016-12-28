@@ -50,18 +50,17 @@ module.exports = (env) ->
     parseAction: (input, context) =>
       match = null
       message = {
-        type: "text"    # content type, e.g. video, photo, audio, text
-        recipients: []  # array of intented recipients coming from rules
+        type: "text"
+        recipients: []
         content: null
       }
       
-      # Action arguments: send [[telegram] | [text(default) | video | audio | photo] telegram to ]] [1strecipient1 ... Nthrecipient] "message | path | url"
       @m1 = null
       @m2 = null
       m = M(input, context)
       m.or([
         ( (@m1) =>
-          # Legacy Action maycher, remove in future version
+          # Legacy Action matcher, remove in future version
           #
           # Action arguments: send telegram [1strecipient1 ... Nthrecipient] "message"
           @m1.match('send telegram ', (@m1) =>
@@ -72,13 +71,13 @@ module.exports = (env) ->
             while more and i < all.length
               more = false if @m1.getRemainingInput().charAt(0) is '"' or null
           
-              @m1.match(all, (@m1, r) => #get the recipients names
+              @m1.match(all, (@m1, r) =>
                 recipient = r.trim()
-                message.recipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient objects
+                message.recipients.push obj for obj in @config.recipients when obj.name is recipient
               )
               i += 1
           )
-          @m1.matchStringWithVars( (@m1, content) => #get the message content
+          @m1.matchStringWithVars( (@m1, content) =>
             message.content = content
             match = @m1.getFullMatch()
           )
@@ -98,13 +97,13 @@ module.exports = (env) ->
               while more and i < all.length
                 more = false if @m1.getRemainingInput().charAt(0) is '"' or null
                  
-                @m2.match(all, (@m2, r) => #get the recipients names
+                @m2.match(all, (@m2, r) =>
                   recipient = r.trim()
-                  message.recipients.push obj for obj in @config.recipients when obj.name is recipient # build array of recipient object
+                  message.recipients.push obj for obj in @config.recipients when obj.name is recipient
                 )
                 i += 1
             )
-          @m2.matchStringWithVars( (@m2, content) => #get the message content
+          @m2.matchStringWithVars( (@m2, content) =>
             message.content = content
             match = @m2.getFullMatch()
           )
@@ -271,11 +270,7 @@ module.exports = (env) ->
   class Recipient
     
     constructor: (@name, @id, @enabled = false) ->
-      return new Promise((resolve, reject) =>
-        resolve @ 
-      ).catch( (err) =>
-        reject "Failed to return Content object"
-      )
+    
     getId: () =>
       env.logger.info "@id: ", @id
       return @id
@@ -311,5 +306,4 @@ module.exports = (env) ->
         @base.rejectWithErrorString Promise.reject, error
       )
         
-      
   return plugin
