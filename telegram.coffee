@@ -3,6 +3,7 @@ module.exports = (env) ->
   Promise = env.require 'bluebird'
   commons = require('pimatic-plugin-commons')(env)
   TelegramBotClient = require 'telegram-bot-client'
+  fs = require('fs')
   M = env.matcher
 
 
@@ -134,14 +135,12 @@ module.exports = (env) ->
       else
         results = null
         return new Promise((resolve, reject) =>
-          new Content(@framework, @message.content).then( (c) =>
-            @recipients.map( (r) => @sendMessage(r, c))
-          ).then( (results) =>
-            Promise.some(results, results.length).then( (result) =>
-              resolve
-            ).catch(Promise.AggregateError, (err) =>
-              @base.error "Message was NOT sent to all recipients"
-            )
+          c = new Content(@framework, @message.content)
+          results = @recipients.map( (r) => @sendMessage(r, c))
+          Promise.some(results, results.length).then( (result) =>
+            resolve
+          ).catch(Promise.AggregateError, (err) =>
+            @base.error "Message was NOT sent to all recipients"
           )
         )
         
@@ -160,7 +159,7 @@ module.exports = (env) ->
     
     constructor: (@token) ->
       @client = new TelegramBotClient(@token)
-  
+      @base = commons.base @, "TelegramActionHandler"
   ###
   # TextMessage Class
   #
@@ -168,13 +167,15 @@ module.exports = (env) ->
   #
   ####
   class Message extends BotClient
-  
-    getResults: (result) =>
-        result.then ((response) =>
-          return Promise.resolve env.logger.info __("Telegram \"%s\" to \"%s\" successfully sent", @content.get(), @recipient.name)
+
+    processResult: (method) =>
+        method.promise().then ((response) =>
+          env.logger.info __("Telegram \"%s\" to %s successfully sent", @content, @recipient.name)
+          return Promise.resolve 
         ), (err) =>
-          return Promise.reject env.logger.error __("Sending Telegram \"%s\" to \"%s\" failed, reason: %s", @content.get(), @recipient.name, err)
-  
+          env.logger.error __("Sending Telegram \"%s\" to %s failed, reason: %s", @content, @recipient.name, err)
+          return Promise.reject 
+    
   ###
   # TextMessage Class
   #
@@ -182,9 +183,12 @@ module.exports = (env) ->
   #
   ####
   class TextMessage extends Message
-    
+      
     send: (@recipient, @content) =>
-      @getResults(@client.sendMessage(@recipient.userChatId, @content.get()).promise())
+      @content.get().then( (message) =>
+        @content = message
+        @processResult(@client.sendMessage(@recipient.userChatId, message))
+      )
      
   ###
   # VideoMessage Class
@@ -193,10 +197,15 @@ module.exports = (env) ->
   #
   ###
   class VideoMessage extends Message
-    
+      
     send: (@recipient, @content) =>
-      env.logger.info " video file is: '", @content.get(),"'" 
-      @getResults(@client.sendVideo(@recipient.userChatId, @content.get().trim()).promise())
+      @content.get().then( (file) =>
+        @content = file
+        if fs.existsSync(file)
+          @processResult(@client.sendVideo(@recipient.userChatId, file))
+        else
+          @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file) 
+      )
   ###
   # AudioMessage Class
   #  
@@ -206,7 +215,13 @@ module.exports = (env) ->
   class AudioMessage extends Message
     
     send: (@recipient, @content) =>
-      @getResults(@client.sendAudio(@recipient.userChatId, @content.get()).promise())
+      @content.get().then( (file) => 
+        @content = file
+        if fs.existsSync(file)
+          @processResult(@client.sendAudio(@recipient.userChatId, file))
+        else
+          @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
+      )
   ###
   # PhotoMessage Class
   #  
@@ -216,7 +231,13 @@ module.exports = (env) ->
   class PhotoMessage extends Message
     
     send: (@recipient, @content) =>
-      @getResults(@client.sendPhoto(@recipient.userChatId, @content.get()).promise())  
+      @content.get().then( (file) =>
+        @content = file
+        if fs.existsSync(file)
+          @processResult(@client.sendPhoto(@recipient.userChatId, file))
+        else
+          @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
+      )
   ###
   #
   # MessageFactory FactoryClass
@@ -277,24 +298,18 @@ module.exports = (env) ->
   class Content
     
     constructor: (@framework, @input) ->
-      return new Promise((resolve, reject) =>
         @base = commons.base @, "TelegramActionHandler"
-        @output = "not set"
-        @parse(@input)
-        resolve @ 
-      ).catch( (err) =>
-        reject "Failed to return Content object"
-      )
+        
     get: () =>
-      return @output
-      
-    parse: (@input) =>
-        @framework.variableManager.evaluateStringExpression(@input).then( (message) =>
-          env.logger.info "message: '", message, "'"
-          @output = message
-          Promise.resolve
+      return new Promise((resolve, reject) =>
+        @framework.variableManager.evaluateStringExpression(@input).then( (content) =>
+          resolve content
         ).catch( (error) =>
-          @base.rejectWithErrorString Promise.reject, error
+          reject error
         )
+      ).catch((error) =>
+        @base.rejectWithErrorString Promise.reject, error
+      )
+        
       
   return plugin
