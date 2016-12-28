@@ -6,23 +6,40 @@ This plugin will allow you to define Telegram recipients in the Plugin config, a
 
 After installation the following action will be made available in Pimatic:
 
-*send telegram [recipient1 recipient 2 recipient3 ...] "message with $variables"
+*send telegram [text | video | audio | photo] [1stRecipient ... nthRecipient] <"text with $variables"  | "/local/path/with/$variables/to/file">
 
-Naming recipients is optional, if you do not provide recipients, a message will be sent to all defined recipients
+Specifying recipients is optional, if you do not provide recipients, a message will be sent to all defined recipients
+Specifiying a message type is optional, when not specifying a type a text message is assumed
 
-Real life Example:
-*'send telegram KingOfMyCastle "Telegram detected movement in room: $room while nobody is home! You may want to check if someone is unexpectely making you a cup of tea"'
+
+Practical examples:
+*'send telegram KingOfMyCastle "ALERT! Pimatic detected movement in room: $room while nobody is home! You may want to check if someone is unexpectely making you a cup of tea"'
+
+*'send video telegram to KingOfMyCastle QueenofMyCastle "/home/pi/front_door_camera.mp4"'
+
+Features:
+========================
+- Send text, audio, video or photo messages to your (mobile) device equipped with the Telegram messaging client
+- Messages may be of types: text, video, audio, or photo 
+- Define multiple recipients in your Pimatic configuration via the user interface or config.json
+- Enable / disable existing recipients
+- Messages can be sent to one, more, or all defined recipients
+- Messages and file paths may contain Pimatic variables
+
+Known issues:
+========================
+- Rules according to the previous format (send telegram [recipient1 ...] "message") are currently supported. However it is strongly encouraged to upgrade your rules to the new format indicating the message type (e.g. send text telegram "message"), as support for old syntax may be removed in future versions.
 
 Requirements
 ========================
-You will need the following:
 - A Telegram client (Available for various mobile platforms, as well as webbased (www.telegram.org)
 - A Telegram bot
 - Obtain chatID's for all Telegram recipiets you would like to receive messages
+- Allowed file formats depend on Telegram supported formats, .mp3 (audio), .mp4, .avi (video), .jpg and .png (photo) have been validated
 
 Installation and Configuration:
 ========================
-
+Please follow these steps to install and configure a working environment:
 
 Obtain a Telegram client
 =========================
@@ -67,9 +84,12 @@ In the plugin config page of Pimatic-Telegram enter the following information:
 
 FAQ
 ======================
+Please check the following first, as all similar issues have been solved so far by taking the below steps:
+
 *I have installed Pimatic-Telegram, but no messages are sent, and no errors are logged. Whats wrong?
 
-Please check the following first, as all similar issues have been solved so far by taking the below steps:
 - Has the plugin been activated? Check in the section "Install the Plugin"
-- Have you activated the intended recipient? Or has the enabled check box accidentally not been checked
-- Restart Pimatic, this is often forgotten after the installation and or configuration. If you did everything right, you have rebooted Pimatic twice, once after installation, and once after configuration
+- Have you activated the intended recipient? Or has the enabled check box accidentally not been checked?
+- Restart Pimatic, this is often forgotten after the installation and or configuration. 
+
+If you took these troubleshooting steps, you have probably rebooted Pimatic twice, once after installation, and once after configuration changes
