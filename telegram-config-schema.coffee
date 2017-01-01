@@ -11,21 +11,25 @@ module.exports = {
       type: "string"
       default: "123456789:ABC1AaBcd12AbBCD1BcCaB012CCCCClAbcA"
     recipients:
-     description: "Additional Telegram recipients"
-     type: "array"
-     default: []
-     items:
-       description: "ChatID/UserID - no longer used, copy to recipients below!"
-       type: "object"
-       properties:
-         name:
-           description: "Recipient Name"
-           type: "string"
-         userChatId:
-           description: "ChatID/UserID of the telegram recipient"
-           type: "string"
-         enabled:
-           description: "Enable / Disable recipient"
-           type: "boolean"
-           default: true
+      description: "Additional Telegram recipients"
+      type: "array"
+      default: []
+      items:
+        description: "ChatID/UserID"
+        type: "object"
+        properties:
+          name:
+            description: "Recipient Name"
+            type: "string"
+          userChatId:
+            description: "ChatID/UserID of the telegram recipient"
+            type: "string"
+          enabled:
+            description: "Enable / Disable recipient"
+            type: "boolean"
+            default: true
+          admin:
+            description: "Allowed to send Pimatic commands from Telegram"
+            type: "boolean"
+            default: false
 }

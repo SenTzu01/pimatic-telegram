@@ -8,6 +8,7 @@
     "telegram.coffee",
     "README.md",
     "telegram-config-schema.coffee",
+    "telegram-device-config-schema.coffee",
     "LICENSE"
   ],
   "version": "1.0.8",
@@ -19,7 +20,7 @@
   "configSchema": "telegram-config-schema.coffee",
   "dependencies": {
     "pimatic-plugin-commons": "^0.8.7",
-    "telegram-bot-client": ">=1.4.0"
+    "telebot": ">=1.0.6"
   },
   "peerDependencies": {
     "pimatic": ">=0.9.*"
