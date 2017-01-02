@@ -111,68 +111,37 @@ module.exports = (env) ->
     parseAction: (input, context) =>
       message = null
       match = null
-      @m1 = null
-      @m2 = null
       
+      # Action arguments: send [[telegram] | [text(default) | video | audio | photo] telegram to ]] [1strecipient1 ... Nthrecipient] "message | path | url"
       m = M(input, context)
-      m.or([
-        ( (@m1) =>
-          # Legacy Action matcher, remove in future version
-          #
-          @m1.match('send telegram ', (@m1) =>
-            message = new MessageFactory('text', {token: @config.apiToken})
-            
-            i = 0
-            more = true
-            all = @config.recipients.map( (r) => r.name + ' ')
-            while more and i < all.length
-              more = false if @m1.getRemainingInput().charAt(0) is '"' or null
-          
-              @m1.match(all, (@m1, r) =>
-                message.addRecipient(new Recipient(obj)) for obj in @config.recipients when obj.name is r.trim
-              )
-              i += 1
-          )
-          @m1.matchStringWithVars( (@m1, content) =>
-            message.addContent(new Content(@framework, content))
-            match = @m1.getFullMatch()
-          )
-        ),
-        ( (@m2) =>
-          # New style Action matcher
-          #
-          # Action arguments: send [[telegram] | [text(default) | video | audio | photo] telegram to ]] [1strecipient1 ... Nthrecipient] "message | path | url"
-          @m2.match('send ')
-            .match(MessageFactory.getTypes().map( (t) => t + ' '), (@m2, type) => 
-              message = new MessageFactory(type.trim(), {token: @config.apiToken})
-            )
-            .match('telegram ')
-            .match('to ', optional: yes, (@m2) =>
-            
-              i = 0
-              more = true
-              all = @config.recipients.map( (r) => r.name + ' ')
-              while more and i < all.length
-                more = false if @m2.getRemainingInput().charAt(0) is '"' or null
-                 
-                @m2.match(all, (@m2, r) =>
-                  message.addRecipient(new Recipient(obj)) for obj in @config.recipients when obj.name is r.trim()
-                )
-                i += 1
-            )
-          @m2.matchStringWithVars( (@m2, content) =>
-            message.addContent(new Content(@framework, content))
-            match = @m2.getFullMatch()
-          )
+      m.match('send ')
+        .match(MessageFactory.getTypes().map( (t) => t + ' '), (@m1, type) => 
+          message = new MessageFactory(type.trim(), {token: @config.apiToken})
         )
-      ])
-      
-      
+        .match('telegram ')
+        .match('to ', optional: yes, (@m1) =>
+        #.optional('to ', (@m) =>
         
-      env.logger.info "message:  ", message
+          i = 0
+          more = true
+          all = @config.recipients.map( (r) => r.name + ' ')
+          while more and i < all.length
+            more = false if @m1.getRemainingInput().charAt(0) is '"' or null
+             
+            @m1.match(all, (@m1, r) =>
+              message.addRecipient(new Recipient(obj)) for obj in @config.recipients when obj.name is r.trim() and obj.enabled
+            )
+            i += 1
+        )
+      @m1.matchStringWithVars( (@m1, content) =>
+        message.addContent(new Content(@framework, content))
+        match = @m1.getFullMatch()
+      )
+      
+      
       if match?
         if message.recipients.length < 1
-          message.addRecipient(new Recipient(obj)) for obj in @config.recipients
+          message.addRecipient(new Recipient(obj)) for obj in @config.recipients when obj.enabled
         return {
           token: match
           nextInput: input.substring(match.length)
@@ -189,8 +158,19 @@ module.exports = (env) ->
       if simulate
         return __("would send telegram \"%s\"", @message.content.get())
       else
-        return @message.send()
-    
+        client = new BotClient({token: @config.apiToken})
+        return client.sendMessage(@message)
+  
+  ###
+  # Listener Class
+  #
+  # .prototype(token: string, deviceconfig: object, framework: object ) => (Listener object)
+  #
+  # .start() => 
+  # .stop() =>
+  # .restart() =>
+  #
+  ###
   class Listener
   
     constructor: (token, config, @framework) ->
@@ -235,8 +215,6 @@ module.exports = (env) ->
     constructor: (options) ->
       @base = commons.base @, "TelegramActionHandler"
       @client = new TelegramBotClient(options)
-      #env.logger.info @client
-      #return @client
     
     botConnect: () =>
       @client.connect()
@@ -250,26 +228,36 @@ module.exports = (env) ->
         if @action.variable? && @action.value?
           # process request
           @client.sendMessage(msg.from.id, @action.variable + " set to " + @action.value)
-  
+    
+    sendMessage: (message) =>
+      return new Promise( (resolve, reject) =>
+        message.send(@client).then( (results) =>
+          Promise.some(results, results.length).then( (result) =>
+            resolve
+          ).catch(Promise.AggregateError, (err) =>
+            @base.error "Message was NOT sent to all recipients"
+          )
+        )
+      )
+        
   ###
   # Message SuperClass
   #
   # .processResult(method: Message Subclass send method) => Promise
   #
   ####
-  class Message extends BotClient
+  class Message
   
     constructor: (options) ->
-      super(options)
       @recipients = []
       @content = null
-      
-    processResult: (method, recipient) =>
+    
+    processResult: (method, message, recipient) =>
         method.then ((response) =>
-          env.logger.info __("Telegram to %s successfully sent", recipient)
-          return Promise.resolve 
+          env.logger.info __("Telegram \"%s\" to %s successfully sent", message, recipient)
+          return Promise.resolve "success"
         ), (err) =>
-          env.logger.error __("Sending Telegram to %s failed, reason: %s", recipient, err.description)
+          env.logger.error __("Sending Telegram \"%s\" to %s failed, reason: %s", message, recipient, err.description)
           return Promise.reject err
     
     addRecipient: (recipient) =>
@@ -286,19 +274,11 @@ module.exports = (env) ->
   ####
   class TextMessage extends Message
    
-    send: () =>
-      results = []
-      return new Promise((resolve, reject) =>
-        @content.get().then( (message) =>
-          results = @recipients.map( (r) => @processResult(@client.sendMessage(r.getId(), message), r.getName()))
-          Promise.some(results, results.length).then( (result) =>
-            resolve
-          ).catch(Promise.AggregateError, (err) =>
-            @base.error "Message was NOT sent to all recipients"
-          )
-        )
+    send: (@client) =>
+      @content.get().then( (message) =>
+        return @recipients.map( (r) => @processResult(@client.sendMessage(r.getId(), message), message, r.getName()))
       )
-     
+      
   ###
   # VideoMessage Class
   #  
@@ -307,20 +287,12 @@ module.exports = (env) ->
   ###
   class VideoMessage extends Message
   
-    send: () =>
-      results = []
-      return new Promise((resolve, reject) =>
-        @content.get().then( (file) =>
-          if fs.existsSync(file)
-            results = @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), file), r.getName()))
-            Promise.some(results, results.length).then( (result) =>
-              resolve
-            ).catch(Promise.AggregateError, (err) =>
-              @base.error "Message was NOT sent to all recipients"
-            )
-          else
-            @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
-        )
+    send: (@client) =>
+      @content.get().then( (file) =>
+        if fs.existsSync(file)
+          return @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), file), file, r.getName()))
+        else
+          @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
       )
       
   ###
@@ -331,20 +303,12 @@ module.exports = (env) ->
   ###
   class AudioMessage extends Message
     
-    send: () =>
-      results = []
-      return new Promise((resolve, reject) =>
-        @content.get().then( (file) =>
-          if fs.existsSync(file)
-            results = @recipients.map( (r) => @processResult(@client.sendAudio(r.getId(), file), r.getName()))
-            Promise.some(results, results.length).then( (result) =>
-              resolve
-            ).catch(Promise.AggregateError, (err) =>
-              @base.error "Message was NOT sent to all recipients"
-            )
-          else
-            @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
-        )
+    send: (@client) =>
+      @content.get().then( (file) =>
+        if fs.existsSync(file)
+          return @recipients.map( (r) => @processResult(@client.sendAudio(r.getId(), file), file, r.getName()))
+        else
+          @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
       )
       
   ###
@@ -355,20 +319,12 @@ module.exports = (env) ->
   ###
   class PhotoMessage extends Message
     
-    send: () =>
-      results = []
-      return new Promise((resolve, reject) =>
-        @content.get().then( (file) =>
-          if fs.existsSync(file)
-            results = @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), file), r.getName()))
-            Promise.some(results, results.length).then( (result) =>
-              resolve
-            ).catch(Promise.AggregateError, (err) =>
-              @base.error "Message was NOT sent to all recipients"
-            )
-          else
-            @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
-        )
+    send: (@client) =>
+      @content.get().then( (file) =>
+        if fs.existsSync(file)
+          return @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), file), r.getName()))
+        else
+          @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
       )
       
   ###
