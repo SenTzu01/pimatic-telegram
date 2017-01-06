@@ -24,33 +24,5 @@ module.exports = {
         description: "Reconnect timeout (in ms)"
         type: "number"
         default: 5000
-      commands:
-        description: "List of allowed commands"
-        type: "array"
-        default: []
-        format: "table"
-        items:
-          type: "object"
-          required: ["name", "request", "variable", "value"]
-          properties:
-            name:
-              description: "Friendly name for this request"
-              type: "string"
-            request:
-              description: "Bot (slash) request to accept"
-              type: "string"
-            variable:
-              description: "Pimatic variable to set when receiving the request"
-              type: "string"
-            value:
-              description: "Value to which the variable is set when receiving the request. Expression?"
-              type: "string"
-            enabled:
-              description: "Enable / Disable this request definition"
-              type: "boolean"
-              default: yes
-            label:
-              description: "Custom label for the frontend"
-              type: "string"
   }
 }

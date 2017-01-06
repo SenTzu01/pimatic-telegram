@@ -184,10 +184,11 @@ module.exports = (env) ->
     constructor: (@config, lastState, @framework, @pluginConfig) ->
       @id = @config.id
       @name = @config.name
-      @attributes = {}
-      @_exprChangeListeners = []
-      @_vars = @framework.variableManager
+      #@attributes = {}
+      #@_exprChangeListeners = []
+      #@_vars = @framework.variableManager
       
+      ###
       for command in @config.commands 
         do (command) =>
           name = command.name
@@ -221,7 +222,7 @@ module.exports = (env) ->
             )
           )
           @_createGetter(name, getValue)
-          
+       ###   
       super()
       
       @client = new BotClient({
@@ -261,25 +262,28 @@ module.exports = (env) ->
   
     constructor: (@commands) ->
       @client = null
-      @commands = []
-      @defaults = [{
+      @commands = [{
           command: "help",
           action: -> return null
           protected: false
+          type: "base"
           response: (msg) =>
             text = "Default commands: \n"
-            for cmd in @defaults
-              text += "\t" + cmd.command + "\n"
+            for cmd in @commands
+              if cmd.type is "base"
+                text += "\t" + cmd.command + "\n"
             text += "\nRule commands: \n"
             for cmd in @commands
-              text += "\t" + cmd.getCommand().toLowerCase() + "\n"
+              if cmd.type is "rule"
+                text += "\t" + cmd.command + "\n"
             return text
         },
         {
           command: "execute", 
           action: -> return null # defined as an empty action for security reasons
           protected: false
-          response: ->
+          type: "restricted",
+          response: (msg) ->
             text = "Command 'execute' received; This is not allowed for security reasons"
             env.logger.error text
             return text
@@ -288,7 +292,8 @@ module.exports = (env) ->
           command: "list devices"
           action: -> return null
           protected: true
-          response: -> 
+          type: "base"
+          response: (msg) -> 
             devices = TelegramPlugin.getDevices()
             text = 'Devices :\n'
             for dev in devices
@@ -299,7 +304,8 @@ module.exports = (env) ->
           command: "get all devices"
           action: -> return null
           protected: true
-          response: -> 
+          type: "base"
+          response: (msg) -> 
             devices = TelegramPlugin.getDevices()
             text = 'Devices :\n'
             for dev in devices
@@ -312,6 +318,7 @@ module.exports = (env) ->
           command: "get device"
           action: -> return null
           protected: true
+          type: "base"
           response: (msg) => 
             obj = msg.split("device", 4)
             devices = TelegramPlugin.getDevices()
@@ -332,56 +339,73 @@ module.exports = (env) ->
       @client.on('text', (msg) =>
         match = false
         message = msg.text.toLowerCase()
-        env.logger.debug "Received message: '" + msg.text + "'"
+        type = "base"
+        name = senderName(msg.from)
+        logRequest(type, "Received message: '" + msg.text + "'")
         
-        for cmd in @defaults
-          if cmd.command.toLowerCase() is message.slice(0, cmd.command.length)
+        for cmd in @commands
+          if cmd.command.toLowerCase() is message.slice(0, cmd.command.length) # test request against base commands and 'receive "command"' predicate in ruleset
             
             # Add authorization logic here
             cmd.action()
             @client.sendMessage(msg.from.id, cmd.response(message), msg.message_id)
-            env.logger.debug "Command '" + message + "' received"
+            type = cmd.type
             match = true
             break
-            
-        if !match    
-          for cmd in @commands
-            if cmd.getCommand().toLowerCase() is message
-              
-              # Add authorization logic here before executing action
-              cmd.emit('change', 'event')
-              @client.sendMessage(msg.from.id, "Command '" + message + "' received; Corresponding rule has been triggered", msg.message_id)
-              env.logger.info "Command '" + message + "' received; Corresponding rule has been triggered"
-              match = true
-              break
         
         if !match
           for act in TelegramPlugin.getActionProviders()
             context = createDummyParseContext()
-            han = act.parseAction(msg.text, context)
+            han = act.parseAction(msg.text, context) # test if message is a valid action, e.g. "turn on switch-room1"
             if han?
               
               # Add authorization logic here
               han.actionHandler.executeAction()
               @client.sendMessage(msg.from.id, "Action '" + message + "' executed", msg.message_id)
-              env.logger.info "Action '" + message + "' executed"
+              type = "action"
               match = true
               break
         
         if !match
-          @client.sendMessage(msg.from.id, "Command '" + message + "' received; this is not a valid command", msg.message_id)
-          env.logger.debug "Command '" + message + "' received; this is not a valid command"
+          @client.sendMessage(msg.from.id, "'" + message + "' is not a valid command", msg.message_id)
+          type = "base"
+        
+        logRequest(type, "Request '" + message + "' received from " + name)
         return
       )
+    
+    logRequest = (type, msg)->
+      switch type
+        when "base" then env.logger.debug msg
+        when "restricted" then env.logger.error msg
+        else env.logger.info msg
+        
+    senderName = (from) =>
+      sender = null
+      if from.first_name?
+        sender = from.first_name
+      else
+        sender = from.username
+        return sender
+      if from.last_name?
+        sender += " " + from.last_name
+      return sender
     
     createDummyParseContext = ->
       variables = {}
       functions = {}
       return M.createParseContext(variables, functions)
       
-    addCommand: (cmd) => 
-      env.logger.debug "adding command ", cmd
-      @commands.push cmd
+    addCommand: (cmd) =>
+      obj = {
+        command: cmd.getCommand()
+        action: (msg) => cmd.emit('change', 'event')
+        protected: true
+        type: "rule"
+        response: (msg) => return "Rule condition '" + obj.command + "' triggered"
+      }
+      @commands.push obj
+      env.logger.debug "added command ", obj.command
           
     changeCommand: (id, command) =>
       
