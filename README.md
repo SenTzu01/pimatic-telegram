@@ -24,7 +24,7 @@ To use the predicates and be able to send requests to Pimatic, you need to defin
 
 Rule examples:
 
- -'send telegram KingOfMyCastle "ALERT! Pimatic detected movement in room: $room while nobody is home! You may want to check if someone is unexpectely making you a cup of tea"'
+- 'send telegram KingOfMyCastle "ALERT! Pimatic detected movement in room: $room while nobody is home! You may want to check if someone is unexpectely making you a cup of tea"'
 - 'send video telegram to KingOfMyCastle QueenofMyCastle "/home/pi/front_door_camera.mp4"'
 - 'when telegram received "turn off heating" then set temp of Thermostat to 15'
 
