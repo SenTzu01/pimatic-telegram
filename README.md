@@ -7,12 +7,14 @@ This plugin will allow you to send messages from Pimatic and allows Pimatic to r
 After installation the following actions and predicates will be made available in Pimatic:
 
 Action Syntax: 
+
 *send telegram <text | video | audio | photo> to [1stRecipient ... nthRecipient] <"text with $variables"  | "/local/path/with/$variables/to/file">
 
 Specifying recipients is optional, if you do not provide recipients, a message will be sent to all defined recipients
 Specifiying a message type is optional, when not specifying a type a text message is assumed
 
-Precidate Syntax: 
+Precidate Syntax:
+
 *telegram received "user-defined-keyword"
 
 Defining rules with this predicate allows you to trigger a rule by sending a message ("user-defined-keyword" as per the example) via your telegram client
