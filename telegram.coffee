@@ -8,10 +8,7 @@ module.exports = (env) ->
   events = require 'events'
   M = env.matcher
   
-  
   class Telegram extends env.plugins.Plugin
-    
-    #cmdMap = []
     
     migrateMainChatId: (@framework, @config) =>
       oldChatId = {
@@ -51,15 +48,30 @@ module.exports = (env) ->
       deviceConfigDef = require("./telegram-device-config-schema")
       @framework.deviceManager.registerDeviceClass("TelegramReceiverDevice", {
         configDef: deviceConfigDef.TelegramReceiverDevice, 
-        createCallback: (config, lastState) => new TelegramReceiverDevice(config, lastState, @framework, @config)
+        createCallback: (config, lastState) => new TelegramReceiverDevice(config, lastState, @framework)
       })
       
     evaluateStringExpression: (value) ->
       return @framework.variableManager.evaluateStringExpression(value)
     
+    getToken: () ->
+      return @config.apiToken
+    
+    getRecipient: (id) =>
+      for r in @config.recipients
+        if r.userChatId is id
+          return new Recipient(r)
+      return false
+    
+    getSender: (id) =>
+      return @getRecipient(id)
+      
     getConfig: () =>
       return @config
     
+    getDeviceById: (id) =>
+      return @framework.deviceManager.getDeviceById(id)
+      
     getDeviceClasses: () =>
       return @framework.deviceManager.getDeviceClasses()
     
@@ -77,8 +89,6 @@ module.exports = (env) ->
       env.logger.debug "Deregister command: #{@cmd.getCommand()}"
       @emit "cmdDeregistered", @cmd
       
-    
-  
   class TelegramPredicateProvider extends env.predicates.PredicateProvider
 
     constructor: (@framework, @config) ->
@@ -109,7 +119,7 @@ module.exports = (env) ->
       else return null
 
   class TelegramPredicateHandler extends env.predicates.PredicateHandler
-    constructor: (framework, @Command) ->
+    constructor: (framework, @command) ->
       super()
 
     setup: ->
@@ -118,7 +128,7 @@ module.exports = (env) ->
 
     getValue: -> Promise.resolve false
     getType: -> 'event'
-    getCommand: -> "#{@Command}"
+    getCommand: -> "#{@command}"
 
     destroy: ->
       TelegramPlugin.deregisterCmd this
@@ -176,57 +186,18 @@ module.exports = (env) ->
       if simulate
         return __("would send telegram \"%s\"", @message.content.get())
       else
-        client = new BotClient({token: @config.apiToken})
+        client = new BotClient({token: TelegramPlugin.getToken()})
         return client.sendMessage(@message)
   
   class TelegramReceiverDevice extends env.devices.Device
     
-    constructor: (@config, lastState, @framework, @pluginConfig) ->
+    constructor: (@config, lastState, @framework) ->
       @id = @config.id
       @name = @config.name
-      #@attributes = {}
-      #@_exprChangeListeners = []
-      #@_vars = @framework.variableManager
-      
-      ###
-      for command in @config.commands 
-        do (command) =>
-          name = command.name
-          
-          if @attributes[name]?
-            throw new Error(
-              "Two commands with the same name in TelegramReceiverDevice config \"#{name}\""
-            )
-
-          @attributes[name] = {
-            description: name
-            label: (if command.label? then command.label else "$#{name}")
-            type: "string"
-          }
-          
-          if command.request? and command.request.length > 0
-            @attributes[name].request = command.request
-          if command.variable? and command.variable.length > 0
-            @attributes[name].variable = command.variable
-          if command.value? and command.value.length > 0
-            @attributes[name].value = command.value
-          if typeof command.enabled is "boolean"
-            @attributes[name].enabled = command.enabled
-          
-          getValue = ( (varsInEvaluation) =>
-            # wait till variableManager is ready
-            return @_vars.waitForInit().then( (val) =>
-              if val isnt @_attributesMeta[name].value
-                @emit name, val
-              return val
-            )
-          )
-          @_createGetter(name, getValue)
-       ###   
       super()
       
       @client = new BotClient({
-        token: @pluginConfig.apiToken
+        token: TelegramPlugin.getToken()
         pooling: {
           interval: @config.interval
           timeout: @config.timeout
@@ -234,7 +205,8 @@ module.exports = (env) ->
           retryTimeout: @config.retryTimeout
         }
       })
-      @listener = new Listener(@config.commands)
+      
+      @listener = new Listener(@id)
       @client.startListener(@listener)
       
       TelegramPlugin.on('cmdRegistered', (cmd) =>
@@ -248,20 +220,12 @@ module.exports = (env) ->
       @client.stopListener(@listener) 
       super()
   
-  ###
-  # Listener Class
-  #
-  # .prototype(token: string, deviceconfig: object, framework: object ) => (Listener object)
-  #
-  # .start() => 
-  # .stop() =>
-  # .restart() =>
-  #
-  ###
   class Listener
   
-    constructor: (@commands) ->
+    constructor: (id) ->
+      @id = id
       @client = null
+      @authenticated = []
       @commands = [{
           command: "help",
           action: -> return null
@@ -280,12 +244,13 @@ module.exports = (env) ->
         },
         {
           command: "execute", 
-          action: -> return null # defined as an empty action for security reasons
+          action: => 
+            logRequest("auth_error", "Command 'execute' received; This is not allowed for security reasons") # It's a trap !!
+            return null
           protected: false
           type: "restricted",
           response: (msg) ->
             text = "Command 'execute' received; This is not allowed for security reasons"
-            env.logger.error text
             return text
         },
         {
@@ -333,51 +298,74 @@ module.exports = (env) ->
       
     start: (@client) =>
       @client.connect()
-      @listenForCommands()
+      @enableRequests()
       
-    listenForCommands: () =>
+    enableRequests: () =>
       @client.on('text', (msg) =>
+        name = senderName(msg.from)
+        sender = TelegramPlugin.getSender(msg.from.id.toString())
         match = false
         message = msg.text.toLowerCase()
-        type = "base"
-        name = senderName(msg.from)
+        type = "base"   
         logRequest(type, "Received message: '" + msg.text + "'")
         
-        for cmd in @commands
-          if cmd.command.toLowerCase() is message.slice(0, cmd.command.length) # test request against base commands and 'receive "command"' predicate in ruleset
-            
-            # Add authorization logic here
-            cmd.action()
-            @client.sendMessage(msg.from.id, cmd.response(message), msg.message_id)
-            type = cmd.type
-            match = true
-            break
         
-        if !match
-          for act in TelegramPlugin.getActionProviders()
-            context = createDummyParseContext()
-            han = act.parseAction(msg.text, context) # test if message is a valid action, e.g. "turn on switch-room1"
-            if han?
-              
-              # Add authorization logic here
-              han.actionHandler.executeAction()
-              @client.sendMessage(msg.from.id, "Action '" + message + "' executed", msg.message_id)
-              type = "action"
+        # auth logic
+        if !sender.isAdmin() # Lord Vader force-chokes you !!
+          logRequest("auth_error", "Received message: '" + msg.text + "' from " + name + ". This user is not authorized!")
+          return
+          
+        date = new Date()
+        if TelegramPlugin.getDeviceById(@id).config.secret is msg.text # Face Vader you must!
+          @authenticated.push {id: sender.getId(), time: date.getTime()}
+          @client.sendMessage(sender.getId(), "Passcode correct, timeout set to 5 minutes. You can now issue requests", msg.message_id)
+          logRequest("auth_success", sender.getName() + " successfully authenticated")
+          return
+        
+        for auth in @authenticated
+          if auth.id is sender.getId()
+            if auth.time < (date.getTime()-(TelegramPlugin.getDeviceById(@id).config.auth_timeout*60000)) # You were carbon frozen for too long, Solo! Solo! Too Nakma Noya Solo!
+              sender.setAuthenticated(false) 
+              #return
+            else
+              sender.setAuthenticated(true)
+        
+        # command logic
+        if sender.isAuthenticated()  # May the force be with you
+          for cmd in @commands
+            if cmd.command.toLowerCase() is message.slice(0, cmd.command.length) # test request against base commands and 'receive "command"' predicate in ruleset
+              cmd.action()
+              @client.sendMessage(msg.from.id, cmd.response(message), msg.message_id)
+              type = cmd.type
               match = true
               break
-        
-        if !match
-          @client.sendMessage(msg.from.id, "'" + message + "' is not a valid command", msg.message_id)
-          type = "base"
-        
-        logRequest(type, "Request '" + message + "' received from " + name)
-        return
+          
+          if !match
+            for act in TelegramPlugin.getActionProviders()
+              context = createDummyParseContext()
+              han = act.parseAction(msg.text, context) # test if message is a valid action, e.g. "turn on switch-room1"
+              if han?
+                han.actionHandler.executeAction()
+                @client.sendMessage(msg.from.id, "Action '" + message + "' executed", msg.message_id)
+                type = "action"
+                match = true
+                break
+          
+          if !match
+            @client.sendMessage(msg.from.id, "'" + message + "' is not a valid command", msg.message_id)
+            type = "base"
+          
+          logRequest(type, "Request '" + message + "' received from " + name)
+          return
+        else # Vader face you must
+          @client.sendMessage(sender.getId(), "Please provide the passcode first and reissue your request after", msg.message_id)
       )
     
-    logRequest = (type, msg)->
+    logRequest = (type, msg) ->
       switch type
         when "base" then env.logger.debug msg
         when "restricted" then env.logger.error msg
+        when "auth_error" then env.logger.error msg
         else env.logger.info msg
         
     senderName = (from) =>
@@ -415,12 +403,6 @@ module.exports = (env) ->
     stop: (@client) =>
       @client.disconnect()
   
-  ###
-  # BotClient Class
-  #
-  # .prototype(token: string) => (botclient object)
-  #
-  ###
   class BotClient
     
     constructor: (options) ->
@@ -444,12 +426,6 @@ module.exports = (env) ->
         )
       )
         
-  ###
-  # Message SuperClass
-  #
-  # .processResult(method: Message Subclass send method) => Promise
-  #
-  ####
   class Message
   
     constructor: (options) ->
@@ -470,12 +446,6 @@ module.exports = (env) ->
     addContent: (content) =>
       @content = content
       
-  ###
-  # TextMessage Class
-  #
-  # .send (recipient: Recipient object, message: Content object) => (Promise.reject, Promise.resolve)
-  #
-  ####
   class TextMessage extends Message
    
     send: (@client) =>
@@ -483,12 +453,6 @@ module.exports = (env) ->
         return @recipients.map( (r) => @processResult(@client.sendMessage(r.getId(), message), message, r.getName()))
       )
       
-  ###
-  # VideoMessage Class
-  #  
-  # .send (recipient: Recipient object, message: Content object) => (Promise.reject, Promise.resolve)
-  #
-  ###
   class VideoMessage extends Message
   
     send: (@client) =>
@@ -499,12 +463,6 @@ module.exports = (env) ->
           @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
       )
       
-  ###
-  # AudioMessage Class
-  #  
-  # .send (recipient: Recipient object, message: Content object) => (Promise.reject, Promise.resolve)
-  #
-  ###
   class AudioMessage extends Message
     
     send: (@client) =>
@@ -515,12 +473,6 @@ module.exports = (env) ->
           @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
       )
       
-  ###
-  # PhotoMessage Class
-  #  
-  # .send (recipient: Recipient object, message: Content object) => (Promise.reject, Promise.resolve)
-  #
-  ###
   class PhotoMessage extends Message
     
     send: (@client) =>
@@ -531,14 +483,6 @@ module.exports = (env) ->
           @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
       )
       
-  ###
-  #
-  # MessageFactory FactoryClass
-  #
-  # .getTypes() => (contentTypes: array)
-  # .getInstance(type: string, opts: )
-  #
-  ###
   class MessageFactory
     types = {
       text: TextMessage
@@ -552,15 +496,6 @@ module.exports = (env) ->
     constructor: (type, args) ->
       return new types[type] args
   
-  ###
-  #  Recipient Class
-  #
-  # .prototype(name: string, id: string, enabled: bool) => (recipient object)
-  # .getId() => (id:string)
-  # .getName() => (name:string)
-  # .isEnabled() => (enabled: bool)
-  #
-  ###
   class Recipient
     
     constructor: (recipient) ->
@@ -568,6 +503,8 @@ module.exports = (env) ->
       @name = recipient.name
       @enabled = recipient.enabled or false
       @admin = recipient.admin or false
+      @cleared = false
+      @authenticated = false
       
     getId: () =>
       return @id
@@ -575,7 +512,7 @@ module.exports = (env) ->
     getName: () =>
       return @name
       
-    isSender: () =>
+    isAdmin: () =>
       return @admin
         
     isEnabled: () =>
@@ -583,9 +520,15 @@ module.exports = (env) ->
     
     isAuthorized: () =>
       if @isEnabled()
-        return @isSender()
+        return @isAdmin()
       return false
-  
+    
+    isAuthenticated: () =>
+      return @authenticated
+      
+    setAuthenticated: (val) =>
+      @authenticated = val
+    
   class RecipientCollection
     constructor: (load = false) ->
       @collection = []
@@ -597,7 +540,7 @@ module.exports = (env) ->
     
     getAll: () ->
       config = TelegramPlugin.getConfig()
-      env.logger.info config
+      env.logger.debug config
       @add(new Recipient(r)) for r in config.recipients
     
     getByName: (name) =>
@@ -612,13 +555,6 @@ module.exports = (env) ->
           return r if r.userChatId is id
       return false
     
-  ###
-  #  Content Class
-  #
-  # .get() => (content:string)
-  # .parse(content: string) => (Promise(resolve, reject)
-  #
-  ###
   class Content
     
     constructor: (@input) ->

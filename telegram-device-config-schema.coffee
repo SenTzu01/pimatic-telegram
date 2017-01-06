@@ -8,18 +8,22 @@ module.exports = {
         description: "Passcode to provide before requests are accepted"
         type: "string"
         default: "change_me_now!"
+      auth_timeout:
+        description: "Time after which passcode needs to be re-entered (in minutes)"
+        type: "number"
+        default: 5
       interval:
         description: "How often to check for new requests (in ms)"
         type: "number"
         default: 1000
       timeout:
-        description: "Update polling timout (0 - short polling"
+        description: "Message polling timout (0 - short polling)"
         type: "number"
         default: 0
       limit:
         description: "Number of new requests to be retrieved"
         type: "number"
-        default: 100
+        default: 10
       retryTimeout:
         description: "Reconnect timeout (in ms)"
         type: "number"
