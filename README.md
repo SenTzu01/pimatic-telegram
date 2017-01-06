@@ -8,27 +8,25 @@ After installation the following actions and predicates will be made available i
 
 Action Syntax: 
 
-*send telegram <text | video | audio | photo> to [1stRecipient ... nthRecipient] <"text with $variables"  | "/local/path/with/$variables/to/file">
+- send telegram <text | video | audio | photo> to [1stRecipient ... nthRecipient] <"text with $variables"  | "/local/path/with/$variables/to/file">
 
 Specifying recipients is optional, if you do not provide recipients, a message will be sent to all defined recipients
 Specifiying a message type is optional, when not specifying a type a text message is assumed
 
 Precidate Syntax:
 
-*telegram received "user-defined-keyword"
+- telegram received "user-defined-keyword"
 
 Defining rules with this predicate allows you to trigger a rule by sending a message ("user-defined-keyword" as per the example) via your telegram client
 To use the predicates and be able to send requests to Pimatic, you need to define a new TelegramReceiverDevice, as well as set the Admin flag on authorized users in the Plugin config
 
-*send actions to Pimatic from your client following the Pimatic rule action syntax, just as you would enter an action in the rule engine
+- send actions to Pimatic from your client following the Pimatic rule action syntax, just as you would enter an action in the rule engine
 
 Rule examples:
 
-*'send telegram KingOfMyCastle "ALERT! Pimatic detected movement in room: $room while nobody is home! You may want to check if someone is unexpectely making you a cup of tea"'
-
-*'send video telegram to KingOfMyCastle QueenofMyCastle "/home/pi/front_door_camera.mp4"'
-
-*'when telegram received "turn off heating" then set temp of Thermostat to 15'
+ -'send telegram KingOfMyCastle "ALERT! Pimatic detected movement in room: $room while nobody is home! You may want to check if someone is unexpectely making you a cup of tea"'
+- 'send video telegram to KingOfMyCastle QueenofMyCastle "/home/pi/front_door_camera.mp4"'
+- 'when telegram received "turn off heating" then set temp of Thermostat to 15'
 
 Messaging command examples:
 *'help' - lists available built-in commands and user-defined predicates
