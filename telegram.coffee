@@ -102,7 +102,7 @@ module.exports = (env) ->
       setCommand = (m, tokens) => recCommand = tokens
 
       m = M(input, context)
-        .match('received ')
+        .match('telegram received ')
         .matchString(setCommand)
 
       if m.hadMatch()

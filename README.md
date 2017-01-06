@@ -1,21 +1,37 @@
 pimatic-Telegram
 =======================
 
-Plugin to provide a new rule action: send telegram
-This plugin will allow you to define Telegram recipients in the Plugin config, and send rule based messages to the Telegram messaging client, which is freely available for a variety of platforms, such as mobiles, tablets and browsers. This service is free of charge!
+Plugin to provide Pimatic integration with Telegram, the freely available messaging system available for a variety of platforms, such as mobiles, tablets and browsers, without additional cost
+This plugin will allow you to send messages from Pimatic and allows Pimatic to receive remote requests which allows you to operate your pimatic system remotely in a safe manner. No inbound firewall ports need to be opened.
 
-After installation the following action will be made available in Pimatic:
+After installation the following actions and predicates will be made available in Pimatic:
 
-*send telegram [text | video | audio | photo] [1stRecipient ... nthRecipient] <"text with $variables"  | "/local/path/with/$variables/to/file">
+Action Syntax: 
+*send telegram <text | video | audio | photo> to [1stRecipient ... nthRecipient] <"text with $variables"  | "/local/path/with/$variables/to/file">
 
 Specifying recipients is optional, if you do not provide recipients, a message will be sent to all defined recipients
 Specifiying a message type is optional, when not specifying a type a text message is assumed
 
+Precidate Syntax: 
+*telegram received "user-defined-keyword"
 
-Practical examples:
+Defining rules with this predicate allows you to trigger a rule by sending a message ("user-defined-keyword" as per the example) via your telegram client
+To use the predicates and be able to send requests to Pimatic, you need to define a new TelegramReceiverDevice, as well as set the Admin flag on authorized users in the Plugin config
+
+*send actions to Pimatic from your client following the Pimatic rule action syntax, just as you would enter an action in the rule engine
+
+Rule examples:
 *'send telegram KingOfMyCastle "ALERT! Pimatic detected movement in room: $room while nobody is home! You may want to check if someone is unexpectely making you a cup of tea"'
-
 *'send video telegram to KingOfMyCastle QueenofMyCastle "/home/pi/front_door_camera.mp4"'
+*'when telegram received "turn off heating" then set temp of Thermostat to 15'
+
+Messaging command examples:
+*'help' - lists available built-in commands and user-defined predicates
+*'list devices'
+*'get all devices'
+*'get device <device_name | device_id>'
+*'set temp of Thermostat to 15'
+*'user defined keyword' - Triggers a defined rule with the "telegram received "user-defined-keyword" condition
 
 Features:
 ========================
@@ -25,10 +41,18 @@ Features:
 - Enable / disable existing recipients
 - Messages can be sent to one, more, or all defined recipients
 - Messages and file paths may contain Pimatic variables
+- Operate your Pimatic by triggering rules or sending commands from your Telegram client
+- Two factor authentication
+  - Only known and authorized id's can send commands
+  - Authentication is required before Pimatic accepts commands
+  - User-configurable authentication timeout (ask password again after n minutes - default is 5 minutes)
+- No inbound firewall ports need to be opened into Pimatic, as Pimatic initiates communication with the Telegram service (polling mechanism)
+
 
 Known issues:
 ========================
-- Rules according to the previous format (send telegram [recipient1 ...] "message") are currently supported. However it is strongly encouraged to upgrade your rules to the new format indicating the message type (e.g. send text telegram "message"), as support for old syntax may be removed in future versions.
+- Rules according to the previous format (send telegram [recipient1 ...] "message") are NO LONGER supported. Upgrade your rules to the new format indicating the message type (e.g. send text telegram "message")
+- "execute" cannot be used as a keyword, to prevent vulnerability exploitation. This is a security concern and will not likely be changed in the near future
 
 Requirements
 ========================
@@ -72,6 +96,7 @@ Install the plugin
 
 Configuration
 =======================
+To send messages from Pimatic:
 In the plugin config page of Pimatic-Telegram enter the following information:
   - Enter the apiToken
   - Under recipients, click "Add" and add new recipients
@@ -82,6 +107,14 @@ In the plugin config page of Pimatic-Telegram enter the following information:
 - Restart Pimatic
 - Now you can use the action in rules to send messages to selected recipients in the Telegram app !
 
+To send commands to Pimatic:
+  - Define a new TelegramReceiverDevice
+    - Make sure to change the default secret !
+  - In the Plugin config, set selected users to be Admin
+  - Optionally define or amend rules to include the "telegram received "keyword" predicate
+  - Restart Pimatic
+  - Send commands from Telegram to Pimatic, a good start is sending "help"
+
 FAQ
 ======================
 Please check the following first, as all similar issues have been solved so far by taking the below steps:
@@ -91,5 +124,11 @@ Please check the following first, as all similar issues have been solved so far 
 - Has the plugin been activated? Check in the section "Install the Plugin"
 - Have you activated the intended recipient? Or has the enabled check box accidentally not been checked?
 - Restart Pimatic, this is often forgotten after the installation and or configuration. 
+
+*I have installed Pimatic-Telegram, but I cannot send instructions to Pimatic
+
+- Have you defined a TelegramReceiverDevice and configured appropriately?
+- Have you set the admin flag for the recipient sending commands and is the recipient enabled?
+- Have you restarted Pimatic after making these configuration changes?
 
 If you took these troubleshooting steps, you have probably rebooted Pimatic twice, once after installation, and once after configuration changes
