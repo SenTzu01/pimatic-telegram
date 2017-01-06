@@ -8,7 +8,10 @@ module.exports = (env) ->
   events = require 'events'
   M = env.matcher
   
+  
   class Telegram extends env.plugins.Plugin
+    
+    #cmdMap = []
     
     migrateMainChatId: (@framework, @config) =>
       oldChatId = {
@@ -37,16 +40,144 @@ module.exports = (env) ->
       oldChatId.migrate()
       
     init: (app, @framework, @config) =>
+      
+      
       @migrateMainChatId(@framework, @config)
+      
+      @framework.ruleManager.addPredicateProvider(new TelegramPredicateProvider(@framework, @config))
       @framework.ruleManager.addActionProvider(new TelegramActionProvider(@framework, @config))
+      
       
       deviceConfigDef = require("./telegram-device-config-schema")
       @framework.deviceManager.registerDeviceClass("TelegramReceiverDevice", {
         configDef: deviceConfigDef.TelegramReceiverDevice, 
         createCallback: (config, lastState) => new TelegramReceiverDevice(config, lastState, @framework, @config)
       })
+      
+    evaluateStringExpression: (value) ->
+      return @framework.variableManager.evaluateStringExpression(value)
+    
+    getConfig: () =>
+      return @config
+    
+    getDeviceClasses: () =>
+      return @framework.deviceManager.getDeviceClasses()
+    
+    getDevices: () ->
+      return @framework.deviceManager.getDevices()
+    
+    getActionProviders: () =>
+      return @framework.ruleManager.actionProviders
+      
+    registerCmd: (@cmd) =>
+      env.logger.debug "Register command: #{@cmd.getCommand()}"
+      @emit "cmdRegistered", @cmd
+    
+    deregisterCmd: (@cmd) =>
+      env.logger.debug "Deregister command: #{@cmd.getCommand()}"
+      @emit "cmdDeregistered", @cmd
+      
     
   
+  class TelegramPredicateProvider extends env.predicates.PredicateProvider
+
+    constructor: (@framework, @config) ->
+      super()
+
+    parsePredicate: (input, context) ->
+      fullMatch = null
+      nextInput = null
+      recCommand = null
+
+      setCommand = (m, tokens) => recCommand = tokens
+
+      m = M(input, context)
+        .match('received ')
+        .matchString(setCommand)
+
+      if m.hadMatch()
+        fullMatch = m.getFullMatch()
+        nextInput = m.getRemainingInput()
+
+      if fullMatch?
+        cassert typeof recCommand is "string"
+        return {
+          token: fullMatch
+          nextInput: input.substring(fullMatch.length)
+          predicateHandler: new TelegramPredicateHandler(@framework, recCommand)
+        }
+      else return null
+
+  class TelegramPredicateHandler extends env.predicates.PredicateHandler
+    constructor: (framework, @Command) ->
+      super()
+
+    setup: ->
+      TelegramPlugin.registerCmd this
+      super()
+
+    getValue: -> Promise.resolve false
+    getType: -> 'event'
+    getCommand: -> "#{@Command}"
+
+    destroy: ->
+      TelegramPlugin.deregisterCmd this
+      super()
+  
+  class TelegramActionProvider extends env.actions.ActionProvider
+    
+    constructor: (@framework, @config) ->
+      
+    parseAction: (input, context) =>
+      message = null
+      match = null
+      
+      # Action arguments: send [[telegram] | [text(default) | video | audio | photo] telegram to ]] [1strecipient1 ... Nthrecipient] "message | path | url"
+      m = M(input, context)
+      m.match('send ')
+        .match(MessageFactory.getTypes().map( (t) => t + ' '), (@m1, type) => 
+          message = new MessageFactory(type.trim(), {token: @config.apiToken})
+        )
+        .match('telegram ')
+        .match('to ', optional: yes, (@m1) =>
+          i = 0
+          more = true
+          all = @config.recipients.map( (r) => r.name + ' ')
+          while more and i < all.length
+            more = false if @m1.getRemainingInput().charAt(0) is '"' or null
+             
+            @m1.match(all, (@m1, r) =>
+              message.addRecipient(new Recipient(obj)) for obj in @config.recipients when obj.name is r.trim() and obj.enabled
+            )
+            i += 1
+        )
+      @m1.matchStringWithVars( (@m1, content) =>
+        message.addContent(new Content(content))
+        match = @m1.getFullMatch()
+      )
+      
+      
+      if match?
+        if message.recipients.length < 1
+          message.addRecipient(new Recipient(obj)) for obj in @config.recipients when obj.enabled
+        return {
+          token: match
+          nextInput: input.substring(match.length)
+          actionHandler: new TelegramActionHandler(@framework, @config, message)
+        }
+      else    
+        return null
+        
+  class TelegramActionHandler extends env.actions.ActionHandler
+  
+    constructor: (@framework, @config, @message) ->
+      
+    executeAction: (simulate) =>
+      if simulate
+        return __("would send telegram \"%s\"", @message.content.get())
+      else
+        client = new BotClient({token: @config.apiToken})
+        return client.sendMessage(@message)
   
   class TelegramReceiverDevice extends env.devices.Device
     
@@ -92,74 +223,29 @@ module.exports = (env) ->
           @_createGetter(name, getValue)
           
       super()
-      env.logger.info "device config: ", @config
-      env.logger.info "plugin config: ", @pluginConfig
-      #env.logger.info "attributes var: ", @attribute
       
-      listener = new Listener(@pluginConfig.apiToken, @config, @framework)
-      listener.start()
-        
-    destroy: ->
-      @listener.disconnect() 
-      super()
-  
-  
-  class TelegramActionProvider extends env.actions.ActionProvider
-    
-    constructor: (@framework, @config) ->
-    
-    parseAction: (input, context) =>
-      message = null
-      match = null
+      @client = new BotClient({
+        token: @pluginConfig.apiToken
+        pooling: {
+          interval: @config.interval
+          timeout: @config.timeout
+          limit: @config.limit
+          retryTimeout: @config.retryTimeout
+        }
+      })
+      @listener = new Listener(@config.commands)
+      @client.startListener(@listener)
       
-      # Action arguments: send [[telegram] | [text(default) | video | audio | photo] telegram to ]] [1strecipient1 ... Nthrecipient] "message | path | url"
-      m = M(input, context)
-      m.match('send ')
-        .match(MessageFactory.getTypes().map( (t) => t + ' '), (@m1, type) => 
-          message = new MessageFactory(type.trim(), {token: @config.apiToken})
-        )
-        .match('telegram ')
-        .match('to ', optional: yes, (@m1) =>
-        #.optional('to ', (@m) =>
-        
-          i = 0
-          more = true
-          all = @config.recipients.map( (r) => r.name + ' ')
-          while more and i < all.length
-            more = false if @m1.getRemainingInput().charAt(0) is '"' or null
-             
-            @m1.match(all, (@m1, r) =>
-              message.addRecipient(new Recipient(obj)) for obj in @config.recipients when obj.name is r.trim() and obj.enabled
-            )
-            i += 1
-        )
-      @m1.matchStringWithVars( (@m1, content) =>
-        message.addContent(new Content(@framework, content))
-        match = @m1.getFullMatch()
+      TelegramPlugin.on('cmdRegistered', (cmd) =>
+        @listener.addCommand(cmd)
+      )
+      TelegramPlugin.on('cmdDeregistered', (cmd) =>
+        @listener.removeCommand(cmd)
       )
       
-      
-      if match?
-        if message.recipients.length < 1
-          message.addRecipient(new Recipient(obj)) for obj in @config.recipients when obj.enabled
-        return {
-          token: match
-          nextInput: input.substring(match.length)
-          actionHandler: new TelegramActionHandler(@framework, @config, message)
-        }
-      else    
-        return null
-  
-  class TelegramActionHandler extends env.actions.ActionHandler
-
-    constructor: (@framework, @config, @message) ->
-      
-    executeAction: (simulate) =>
-      if simulate
-        return __("would send telegram \"%s\"", @message.content.get())
-      else
-        client = new BotClient({token: @config.apiToken})
-        return client.sendMessage(@message)
+    destroy: ->
+      @client.stopListener(@listener) 
+      super()
   
   ###
   # Listener Class
@@ -173,36 +259,137 @@ module.exports = (env) ->
   ###
   class Listener
   
-    constructor: (token, config, @framework) ->
-      @commands = config.commands
-      options = {
-        token: token
-        pooling: {
-          interval: config.interval
-          timeout: config.timeout
-          limit: config.limit
-          retryTimeout: config.retryTimeout
-        }
-      }
-      @client = new BotClient(options)
+    constructor: (@commands) ->
+      @client = null
+      @commands = []
+      @defaults = [{
+          command: "help",
+          action: -> return null
+          protected: false
+          response: (msg) =>
+            text = "Default commands: \n"
+            for cmd in @defaults
+              text += "\t" + cmd.command + "\n"
+            text += "\nRule commands: \n"
+            for cmd in @commands
+              text += "\t" + cmd.getCommand().toLowerCase() + "\n"
+            return text
+        },
+        {
+          command: "execute", 
+          action: -> return null # defined as an empty action for security reasons
+          protected: false
+          response: ->
+            text = "Command 'execute' received; This is not allowed for security reasons"
+            env.logger.error text
+            return text
+        },
+        {
+          command: "list devices"
+          action: -> return null
+          protected: true
+          response: -> 
+            devices = TelegramPlugin.getDevices()
+            text = 'Devices :\n'
+            for dev in devices
+              text += '\tName: ' + dev.name + "\t\tID: " + dev.id + "\t\tType: " +  dev.constructor.name + "\n"
+            return text
+        },
+        {
+          command: "get all devices"
+          action: -> return null
+          protected: true
+          response: -> 
+            devices = TelegramPlugin.getDevices()
+            text = 'Devices :\n'
+            for dev in devices
+              text += 'Name: ' + dev.name + " \t\tID: " + dev.id + " \t\tType: " +  dev.constructor.name + "\n"
+              for name of dev.attributes
+                text += '\t\t' + name + " " + dev.getLastAttributeValue(name) + "\n"
+            return text
+        },
+        {
+          command: "get device"
+          action: -> return null
+          protected: true
+          response: (msg) => 
+            obj = msg.split("device", 4)
+            devices = TelegramPlugin.getDevices()
+            for dev in devices
+              if ( obj[1].substring(1) == dev.id.toLowerCase() ) or ( obj[1].substring(1) == dev.name.toLowerCase() )
+                text = 'Name: ' + dev.name + " \t\tID: " + dev.id + " \t\tType: " +  dev.constructor.name + "\n"
+                for name of dev.attributes
+                  text += '\t\t' + name + " " + dev.getLastAttributeValue(name) + "\n"
+                return text
+            return "device not found"
+        }]
       
-    start: () =>
-      @client.botConnect()
-    
-      for command in @commands
-        do (command) =>
-          @client.addListener(command.request,{variable: command.variable, value: command.value})
-    
-    stop: () =>
-      @client.botDisconnect()
-    
-    restart: () =>
-      @stop()
-      @start()
+    start: (@client) =>
+      @client.connect()
+      @listenForCommands()
       
-    destruct: () =>
-      @stop()
-      return
+    listenForCommands: () =>
+      @client.on('text', (msg) =>
+        match = false
+        message = msg.text.toLowerCase()
+        env.logger.debug "Received message: '" + msg.text + "'"
+        
+        for cmd in @defaults
+          if cmd.command.toLowerCase() is message.slice(0, cmd.command.length)
+            
+            # Add authorization logic here
+            cmd.action()
+            @client.sendMessage(msg.from.id, cmd.response(message), msg.message_id)
+            env.logger.debug "Command '" + message + "' received"
+            match = true
+            break
+            
+        if !match    
+          for cmd in @commands
+            if cmd.getCommand().toLowerCase() is message
+              
+              # Add authorization logic here before executing action
+              cmd.emit('change', 'event')
+              @client.sendMessage(msg.from.id, "Command '" + message + "' received; Corresponding rule has been triggered", msg.message_id)
+              env.logger.info "Command '" + message + "' received; Corresponding rule has been triggered"
+              match = true
+              break
+        
+        if !match
+          for act in TelegramPlugin.getActionProviders()
+            context = createDummyParseContext()
+            han = act.parseAction(msg.text, context)
+            if han?
+              
+              # Add authorization logic here
+              han.actionHandler.executeAction()
+              @client.sendMessage(msg.from.id, "Action '" + message + "' executed", msg.message_id)
+              env.logger.info "Action '" + message + "' executed"
+              match = true
+              break
+        
+        if !match
+          @client.sendMessage(msg.from.id, "Command '" + message + "' received; this is not a valid command", msg.message_id)
+          env.logger.debug "Command '" + message + "' received; this is not a valid command"
+        return
+      )
+    
+    createDummyParseContext = ->
+      variables = {}
+      functions = {}
+      return M.createParseContext(variables, functions)
+      
+    addCommand: (cmd) => 
+      env.logger.debug "adding command ", cmd
+      @commands.push cmd
+          
+    changeCommand: (id, command) =>
+      
+    removeCommand: (cmd) =>
+      @commands.splice(@commands.indexOf(cmd),1)
+      
+    stop: (@client) =>
+      @client.disconnect()
   
   ###
   # BotClient Class
@@ -216,18 +403,11 @@ module.exports = (env) ->
       @base = commons.base @, "TelegramActionHandler"
       @client = new TelegramBotClient(options)
     
-    botConnect: () =>
-      @client.connect()
+    stopListener: (listener) =>
+      listener.stop(@client)
     
-    botDisconnect: () =>
-      @client.disconnect()
-    
-    addListener: (@request, @action = {}) =>
-      @client.on ('/' + @request), (msg) =>
-        env.logger.info msg
-        if @action.variable? && @action.value?
-          # process request
-          @client.sendMessage(msg.from.id, @action.variable + " set to " + @action.value)
+    startListener: (listener) =>
+      listener.start(@client)
     
     sendMessage: (message) =>
       return new Promise( (resolve, reject) =>
@@ -382,6 +562,32 @@ module.exports = (env) ->
         return @isSender()
       return false
   
+  class RecipientCollection
+    constructor: (load = false) ->
+      @collection = []
+      if load
+        @getAll()
+    
+    add: (recipient) =>
+        @collection.push recipient
+    
+    getAll: () ->
+      config = TelegramPlugin.getConfig()
+      env.logger.info config
+      @add(new Recipient(r)) for r in config.recipients
+    
+    getByName: (name) =>
+      for r in @collection
+        do (r) =>
+          return r if r.name is name
+      return false
+    
+    getById: (id) =>
+      for r in @collection
+        do (r) =>
+          return r if r.userChatId is id
+      return false
+    
   ###
   #  Content Class
   #
@@ -391,12 +597,12 @@ module.exports = (env) ->
   ###
   class Content
     
-    constructor: (@framework, @input) ->
-        @base = commons.base @, "TelegramActionHandler"
+    constructor: (@input) ->
+      @base = commons.base @, "TelegramActionHandler"
         
     get: () =>
       return new Promise((resolve, reject) =>
-        @framework.variableManager.evaluateStringExpression(@input).then( (content) =>
+        TelegramPlugin.evaluateStringExpression(@input).then( (content) =>
           resolve content
         ).catch( (error) =>
           reject error
@@ -407,5 +613,6 @@ module.exports = (env) ->
     
     set: (@input) ->
       
-  plugin = new Telegram()
-  return plugin
+  module.exports.TelegramActionHandler = TelegramActionHandler
+  TelegramPlugin = new Telegram()
+  return TelegramPlugin
