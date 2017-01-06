@@ -29,12 +29,12 @@ Rule examples:
 - 'when telegram received "turn off heating" then set temp of Thermostat to 15'
 
 Messaging command examples:
-*'help' - lists available built-in commands and user-defined predicates
-*'list devices'
-*'get all devices'
-*'get device <device_name | device_id>'
-*'set temp of Thermostat to 15'
-*'user defined keyword' - Triggers a defined rule with the "telegram received "user-defined-keyword" condition
+- 'help' - lists available built-in commands and user-defined predicates
+- 'list devices'
+- 'get all devices'
+- 'get device <device_name | device_id>'
+- 'set temp of Thermostat to 15'
+- 'user defined keyword' - Triggers a defined rule with the "telegram received "user-defined-keyword" condition
 
 Features:
 ========================
