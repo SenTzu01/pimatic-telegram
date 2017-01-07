@@ -143,8 +143,8 @@ module.exports = (env) ->
       match = null
       
       # Action arguments: send [[telegram] | [text(default) | video | audio | photo] telegram to ]] [1strecipient1 ... Nthrecipient] "message | path | url"
-      m = M(input, context)
-      m.match('send ')
+      @m1 = M(input, context)
+      @m1.match('send ')
         .match(MessageFactory.getTypes().map( (t) => t + ' '), (@m1, type) => 
           message = new MessageFactory(type.trim(), {token: @config.apiToken})
         )
