@@ -9,16 +9,16 @@ GULP=$TELEGRAM_DIR/node_modules/gulp/bin/gulp.js
 # install gulp-babel
 cd $TELEGRAM_DIR/node_modules
 if [ ! -d "gulp" ]; then
-  npm install gulp
+  npm install gulp --save-dev
 fi
 if [ ! -d "gulp-babel" ]; then
-  npm install gulp-babel 
+  npm install gulp-babel --save-dev
 fi
 if [ ! -d "babel-core" ]; then
-  npm install babel-core
+  npm install babel-core --save-dev
 fi
 if [ ! -d "babel-register" ]; then
-  npm install babel-register
+  npm install babel-register --save-dev
 fi
 
 # transpile telebot js files
