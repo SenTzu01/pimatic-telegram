@@ -198,7 +198,7 @@ module.exports = (env) ->
       
       @client = new BotClient({
         token: TelegramPlugin.getToken()
-        pooling: {
+        polling: {
           interval: @config.interval
           timeout: @config.timeout
           limit: @config.limit
