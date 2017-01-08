@@ -20,7 +20,7 @@
   "configSchema": "telegram-config-schema.coffee",
   "dependencies": {
     "pimatic-plugin-commons": "^0.8.7",
-    "telebot": "https://github.com/SenTzu01/telebot.git"
+    "telebot": "git+https://github.com/SenTzu01/telebot.git"
   },
   "peerDependencies": {
     "pimatic": ">=0.9.*"
