@@ -9,7 +9,7 @@ GULP=$TELEGRAM_DIR/node_modules/gulp/bin/gulp.js
 # install telebot and gulp with dependencies
 cd $TELEGRAM_DIR/node_modules
 if [ ! -d "telebot" ]; then
-  npm install git+https://github.com/sentzu01/telebot.git
+  git clone https://github.com/sentzu01/telebot.git
 fi
 if [ ! -d "gulp" ]; then
   npm install gulp --save-dev
