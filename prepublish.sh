@@ -2,9 +2,24 @@
 
 # Pimatic-Telegram npm prepublish script
 
-TELEGRAM_DIR=~/pi/pimatic-dev/node_modules/pimatic-telegram
+TELEGRAM_DIR=~/pimatic-dev/node_modules/pimatic-telegram
 TELEBOT_DIST_DIR=$TELEGRAM_DIR/node_modules/telebot/dist
 GULP=$TELEGRAM_DIR/node_modules/gulp/bin/gulp.js
+
+# install gulp-babel
+cd $TELEGRAM_DIR/node_modules
+if [ ! -d "gulp" ]; then
+  npm install gulp
+fi
+if [ ! -d "gulp-babel" ]; then
+  npm install gulp-babel 
+fi
+if [ ! -d "babel-core" ]; then
+  npm install babel-core
+fi
+if [ ! -d "babel-register" ]; then
+  npm install babel-register
+fi
 
 # transpile telebot js files
 cd $TELEGRAM_DIR

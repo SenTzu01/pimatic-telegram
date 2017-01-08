@@ -1,7 +1,7 @@
 const gulp = require('gulp');
 const babel = require('gulp-babel');
  
-gulp.task('telebot', () => {
+gulp.task('default', () => {
     return gulp.src('./node_modules/telebot/lib/*.js')
         .pipe(babel({
             presets: ['es2015']
