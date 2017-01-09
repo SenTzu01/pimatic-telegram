@@ -235,7 +235,10 @@ module.exports = (env) ->
             text = "Default commands: \n"
             for cmd in @commands
               if cmd.type is "base"
-                text += "\t" + cmd.command + "\n"
+                text += "\t" + cmd.command
+                if cmd.command is "get device"
+                  text += " <device name | device id>"
+                text += "\n"
             text += "\nRule commands: \n"
             for cmd in @commands
               if cmd.type is "rule"
@@ -262,21 +265,7 @@ module.exports = (env) ->
             devices = TelegramPlugin.getDevices()
             text = 'Devices :\n'
             for dev in devices
-              text += '\tName: ' + dev.name + "\t\tID: " + dev.id + "\t\tType: " +  dev.constructor.name + "\n"
-            return text
-        },
-        {
-          command: "get all devices"
-          action: -> return null
-          protected: true
-          type: "base"
-          response: (msg) -> 
-            devices = TelegramPlugin.getDevices()
-            text = 'Devices :\n'
-            for dev in devices
-              text += 'Name: ' + dev.name + " \t\tID: " + dev.id + " \t\tType: " +  dev.constructor.name + "\n"
-              for name of dev.attributes
-                text += '\t\t' + name + " " + dev.getLastAttributeValue(name) + "\n"
+              text += '\tName: ' + dev.name + "\tID: " + dev.id + "\n\n"
             return text
         },
         {
@@ -289,9 +278,9 @@ module.exports = (env) ->
             devices = TelegramPlugin.getDevices()
             for dev in devices
               if ( obj[1].substring(1) == dev.id.toLowerCase() ) or ( obj[1].substring(1) == dev.name.toLowerCase() )
-                text = 'Name: ' + dev.name + " \t\tID: " + dev.id + " \t\tType: " +  dev.constructor.name + "\n"
+                text = 'Name: ' + dev.name + " \tID: " + dev.id + " \tType: " +  dev.constructor.name + "\n"
                 for name of dev.attributes
-                  text += '\t\t' + name + " " + dev.getLastAttributeValue(name) + "\n"
+                  text += '\t\t' + name.charAt(0).toUpperCase() + name.slice(1) + ": " + dev.getLastAttributeValue(name) + "\n\n"
                 return text
             return "device not found"
         }]
@@ -335,7 +324,8 @@ module.exports = (env) ->
           for cmd in @commands
             if cmd.command.toLowerCase() is message.slice(0, cmd.command.length) # test request against base commands and 'receive "command"' predicate in ruleset
               cmd.action()
-              @client.sendMessage(msg.from.id, cmd.response(message), msg.message_id)
+              for chunk in @messageChunks(cmd.response(message))
+                @client.sendMessage(msg.from.id, chunk, msg.message_id)
               type = cmd.type
               match = true
               break
@@ -360,6 +350,9 @@ module.exports = (env) ->
         else # Vader face you must
           @client.sendMessage(sender.getId(), "Please provide the passcode first and reissue your request after", msg.message_id)
       )
+
+    messageChunks: (msg) ->
+      return msg.match(/[\s\S]{1,2048}/g)
     
     logRequest = (type, msg) ->
       switch type
