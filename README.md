@@ -31,7 +31,7 @@ Rule examples:
 Messaging command examples:
 - 'help' - lists available built-in commands and user-defined predicates
 - 'list devices' - Summary list of all devices
-- 'get device <device_name | device_id>' - get details on a device
+- 'get device device_name | device_id' - get details on a device
 - 'set temp of Thermostat to 15' - execute a device action using rule action syntax
 - 'user defined keyword' - Triggers a defined rule with the "telegram received "user-defined-keyword" condition
 
