@@ -307,7 +307,7 @@ module.exports = (env) ->
         date = new Date()
         if TelegramPlugin.getDeviceById(@id).config.secret is msg.text # Face Vader you must!
           @authenticated.push {id: sender.getId(), time: date.getTime()}
-          @client.sendMessage(sender.getId(), "Passcode correct, timeout set to 5 minutes. You can now issue requests", msg.message_id)
+          @client.sendMessage(sender.getId(), "Passcode correct, timeout set to " + TelegramPlugin.getDeviceById(@id).config.auth_timeout + " minutes. You can now issue requests", msg.message_id)
           logRequest("auth_success", sender.getName() + " successfully authenticated")
           return
         
