@@ -30,10 +30,9 @@ Rule examples:
 
 Messaging command examples:
 - 'help' - lists available built-in commands and user-defined predicates
-- 'list devices'
-- 'get all devices'
-- 'get device <device_name | device_id>'
-- 'set temp of Thermostat to 15'
+- 'list devices' - Summary list of all devices
+- 'get device <device_name | device_id>' - get details on a device
+- 'set temp of Thermostat to 15' - execute a device action using rule action syntax
 - 'user defined keyword' - Triggers a defined rule with the "telegram received "user-defined-keyword" condition
 
 Features:
@@ -44,7 +43,7 @@ Features:
 - Enable / disable existing recipients
 - Messages can be sent to one, more, or all defined recipients
 - Messages and file paths may contain Pimatic variables
-- Operate your Pimatic by triggering rules or sending commands from your Telegram client
+- Operate your Pimatic by triggering rules or sending device commands from your Telegram client
 - Two factor authentication
   - Only known and authorized id's can send commands
   - Authentication is required before Pimatic accepts commands
