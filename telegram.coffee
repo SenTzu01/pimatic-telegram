@@ -27,11 +27,13 @@ module.exports = (env) ->
           return found
           
         migrate: =>
-          if oldChatId.migrated() is null and oldChatId.oldId() isnt null
-            env.logger.info "old userChatId: " + oldChatId.oldId() + " found, migrating..."
-            oldChatId = {name: oldChatId.name, userChatId: oldChatId.oldId(), enabled: oldChatId.enabled}
-            @config.recipients.push oldChatId
-            delete @config.userChatId if @config.hasOwnProperty('userChatId')
+          if oldChatId.oldId() isnt null
+            if oldChatId.migrated() is null
+              env.logger.info "old userChatId: " + oldChatId.oldId() + " found, migrating..."
+              oldChatId = {name: oldChatId.name, userChatId: oldChatId.oldId(), enabled: oldChatId.enabled}
+              @config.recipients.push oldChatId
+            else
+              delete @config.userChatId if @config.hasOwnProperty('userChatId')
             @framework.pluginManager.updatePluginConfig(@config.plugin, @config)
       }
       oldChatId.migrate()
@@ -307,7 +309,7 @@ module.exports = (env) ->
         date = new Date()
         if TelegramPlugin.getDeviceById(@id).config.secret is msg.text # Face Vader you must!
           @authenticated.push {id: sender.getId(), time: date.getTime()}
-          @client.sendMessage(sender.getId(), "Passcode correct, timeout set to 5 minutes. You can now issue requests", msg.message_id)
+          @client.sendMessage(sender.getId(), "Passcode correct, timeout set to " + TelegramPlugin.getDeviceById(@id).config.auth_timeout + " minutes. You can now issue requests", msg.message_id)
           logRequest("auth_success", sender.getName() + " successfully authenticated")
           return
         
