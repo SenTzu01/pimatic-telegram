@@ -27,12 +27,14 @@ module.exports = (env) ->
           return found
           
         migrate: =>
-          if oldChatId.migrated() is null and oldChatId.oldId() isnt null
-            env.logger.info "old userChatId: " + oldChatId.oldId() + " found, migrating..."
-            oldChatId = {name: oldChatId.name, userChatId: oldChatId.oldId(), enabled: oldChatId.enabled}
-            @config.recipients.push oldChatId
-            delete @config.userChatId if @config.hasOwnProperty('userChatId')
-            @framework.pluginManager.updatePluginConfig(@config.plugin, @config)
+          if oldChatId.oldId() isnt null
+            if oldChatId.migrated() is null
+              env.logger.info "old userChatId: " + oldChatId.oldId() + " found, migrating..."
+              oldChatId = {name: oldChatId.name, userChatId: oldChatId.oldId(), enabled: oldChatId.enabled}
+              @config.recipients.push oldChatId
+              @framework.pluginManager.updatePluginConfig(@config.plugin, @config)
+            else
+              delete @config.userChatId if @config.hasOwnProperty('userChatId')
       }
       oldChatId.migrate()
       
