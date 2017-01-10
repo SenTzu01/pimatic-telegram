@@ -427,7 +427,7 @@ module.exports = (env) ->
     
     processResult: (method, message, recipient) =>
         method.then ((response) =>
-          env.logger.info response
+          env.logger.debug response
           env.logger.info __("Telegram \"%s\" to %s successfully sent", message, recipient)
           return Promise.resolve "success"
         ), (err) =>
