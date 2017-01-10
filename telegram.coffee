@@ -32,9 +32,9 @@ module.exports = (env) ->
               env.logger.info "old userChatId: " + oldChatId.oldId() + " found, migrating..."
               oldChatId = {name: oldChatId.name, userChatId: oldChatId.oldId(), enabled: oldChatId.enabled}
               @config.recipients.push oldChatId
-              @framework.pluginManager.updatePluginConfig(@config.plugin, @config)
             else
               delete @config.userChatId if @config.hasOwnProperty('userChatId')
+            @framework.pluginManager.updatePluginConfig(@config.plugin, @config)
       }
       oldChatId.migrate()
       
