@@ -219,7 +219,7 @@ module.exports = (env) ->
     destroy: ->
       @client.stopListener(@listener) 
       super()
-  
+    
   class Listener
   
     constructor: (id) ->
@@ -307,7 +307,7 @@ module.exports = (env) ->
         date = new Date()
         if TelegramPlugin.getDeviceById(@id).config.secret is msg.text # Face Vader you must!
           @authenticated.push {id: sender.getId(), time: date.getTime()}
-          @client.sendMessage(sender.getId(), "Passcode correct, timeout set to 5 minutes. You can now issue requests", msg.message_id)
+          @client.sendMessage(sender.getId(), "Passcode correct, timeout set to " + TelegramPlugin.getDeviceById(@id).config.auth_timeout + " minutes. You can now issue requests", msg.message_id)
           logRequest("auth_success", sender.getName() + " successfully authenticated")
           return
         
@@ -350,7 +350,7 @@ module.exports = (env) ->
         else # Vader face you must
           @client.sendMessage(sender.getId(), "Please provide the passcode first and reissue your request after", msg.message_id)
       )
-
+    
     messageChunks: (msg) ->
       return msg.match(/[\s\S]{1,2048}/g)
     
@@ -475,6 +475,17 @@ module.exports = (env) ->
         else
           @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
       )
+  
+  class LocationMessage extends Message
+    
+    send: (@client) =>
+      @content.get().then( (gps) =>
+        coord = gps.split(';')
+        if (!isNaN(coord[0]) && coord[0].toString().indexOf('.') isnt -1) and (!isNaN(coord[1]) && coord[1].toString().indexOf('.') isnt -1)
+          return @recipients.map( (r) => @processResult(@client.sendLocation(r.getId(), [coord[0], coord[1]]), r.getName()))
+        else
+          @base.rejectWithErrorString Promise.reject, __("Cannot send coordinates via telegram - Latitude / Longtitude \"%s\" not valid", gps)
+      )
       
   class MessageFactory
     types = {
@@ -482,6 +493,7 @@ module.exports = (env) ->
       video: VideoMessage
       audio: AudioMessage
       photo: PhotoMessage
+      gps: LocationMessage
     }
     
     @getTypes: -> return Object.keys(types)
