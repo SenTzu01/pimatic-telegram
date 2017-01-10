@@ -427,6 +427,7 @@ module.exports = (env) ->
     
     processResult: (method, message, recipient) =>
         method.then ((response) =>
+          env.logger.info response
           env.logger.info __("Telegram \"%s\" to %s successfully sent", message, recipient)
           return Promise.resolve "success"
         ), (err) =>
@@ -482,7 +483,7 @@ module.exports = (env) ->
       @content.get().then( (gps) =>
         coord = gps.split(';')
         if (!isNaN(coord[0]) && coord[0].toString().indexOf('.') isnt -1) and (!isNaN(coord[1]) && coord[1].toString().indexOf('.') isnt -1)
-          return @recipients.map( (r) => @processResult(@client.sendLocation(r.getId(), [coord[0], coord[1]]), r.getName()))
+          return @recipients.map( (r) => @processResult(@client.sendLocation(r.getId(), [coord[0], coord[1]]), gps, r.getName()))
         else
           @base.rejectWithErrorString Promise.reject, __("Cannot send coordinates via telegram - Latitude / Longtitude \"%s\" not valid", gps)
       )
