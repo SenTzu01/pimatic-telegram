@@ -148,7 +148,7 @@ module.exports = (env) ->
       @m1 = M(input, context)
       @m1.match('send ')
         .match(MessageFactory.getTypes().map( (t) => t + ' '), (@m1, type) => 
-          message = new MessageFactory(type.trim(), {token: @config.apiToken})
+          message = new MessageFactory(type.trim())
         )
         .match('telegram ')
         .match('to ', optional: yes, (@m1) =>
@@ -163,8 +163,9 @@ module.exports = (env) ->
             )
             i += 1
         )
-      @m1.matchStringWithVars( (@m1, content) =>
-        message.addContent(new Content(content))
+      @m1.matchStringWithVars( (@m1, c) =>
+        content = new Content(c)
+        message.addContent(content)
         match = @m1.getFullMatch()
       )
       
@@ -189,7 +190,7 @@ module.exports = (env) ->
         return __("would send telegram \"%s\"", @message.content.get())
       else
         client = new BotClient({token: TelegramPlugin.getToken()})
-        return client.sendMessage(@message)
+        client.sendMessage(@message)
   
   class TelegramReceiverDevice extends env.devices.Device
     
@@ -418,6 +419,8 @@ module.exports = (env) ->
           ).catch(Promise.AggregateError, (err) =>
             @base.error "Message was NOT sent to all recipients"
           )
+        ).catch( (err) =>
+          @base.error err
         )
       )
         
@@ -444,39 +447,42 @@ module.exports = (env) ->
   class TextMessage extends Message
    
     send: (@client) =>
-      @content.get().then( (message) =>
-        return @recipients.map( (r) => @processResult(@client.sendMessage(r.getId(), message), message, r.getName()))
-      )
+      @content.validateString()
+        .then( (message) =>
+          return @recipients.map( (r) => @processResult(@client.sendMessage(r.getId(), message), message, r.getName()))
+        ).catch( (err) =>
+          Promise.reject err
+        )
       
   class VideoMessage extends Message
   
     send: (@client) =>
-      @content.get().then( (file) =>
-        if fs.existsSync(file)
+      @content.validateMedia()
+        .then( (file) =>
           return @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), file), file, r.getName()))
-        else
-          @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
-      )
+        ).catch( (err) =>
+          Promise.reject "Cannot send media via Telegram", err
+        )
       
   class AudioMessage extends Message
     
     send: (@client) =>
-      @content.get().then( (file) =>
-        if fs.existsSync(file)
+      @content.validateMedia()
+        .then( (file) =>
           return @recipients.map( (r) => @processResult(@client.sendAudio(r.getId(), file), file, r.getName()))
-        else
-          @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
-      )
+        ).catch((err) =>
+          Promise.reject "Cannot send media via Telegram", err
+        )
       
   class PhotoMessage extends Message
     
     send: (@client) =>
-      @content.get().then( (file) =>
-        if fs.existsSync(file)
-          return @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), file), r.getName()))
-        else
-          @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
-      )
+      @content.validateMedia()
+        .then( (file) =>
+            return @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), file), r.getName()))
+        ).catch( (err) =>
+            Promise.reject "Cannot send media via Telegram", err
+        )
       
   class MessageFactory
     types = {
@@ -490,7 +496,7 @@ module.exports = (env) ->
     
     constructor: (type, args) ->
       return new types[type] args
-  
+       
   class Recipient
     
     constructor: (recipient) ->
@@ -567,7 +573,33 @@ module.exports = (env) ->
       )
     
     set: (@input) ->
+    
+    validateString: () =>
+
+      @get()
+        .then( (value) =>
+          if typeof value is "string"
+            Promise.resolve value
+          else
+            Promise.reject __("\"%s\" is not a string", value)
+        ).catch( (err) =>
+          Promise.reject err
+        )
       
+    validateMedia: () ->
+      @validateString()
+        .then( (file) =>
+          if !fs.existsSync(file)
+            err = __("File: \"%s\" does not exist", file)
+            @base.error err
+            Promise.reject err
+          else
+            Promise.resolve file
+        ).catch( (err) =>
+          @base.error err
+          Promise.reject err
+        )
+    
   module.exports.TelegramActionHandler = TelegramActionHandler
   TelegramPlugin = new Telegram()
   return TelegramPlugin
