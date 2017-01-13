@@ -40,7 +40,6 @@ module.exports = (env) ->
       
     init: (app, @framework, @config) =>
       
-      
       @migrateMainChatId(@framework, @config)
       
       @framework.ruleManager.addPredicateProvider(new TelegramPredicateProvider(@framework, @config))
@@ -56,6 +55,9 @@ module.exports = (env) ->
     evaluateStringExpression: (value) ->
       return @framework.variableManager.evaluateStringExpression(value)
     
+    parseVariableExpression: (value) ->
+      return @framework.variableManager.parseVariableExpression(value)
+      
     getToken: () ->
       return @config.apiToken
     
@@ -163,9 +165,10 @@ module.exports = (env) ->
             )
             i += 1
         )
-      @m1.matchStringWithVars( (@m1, c) =>
-        content = new Content(c)
-        message.addContent(content)
+      @m1.matchStringWithVars( (@m1, expr) =>
+        @framework.variableManager.evaluateStringExpression(expr).then( (content) =>
+          message.addContent(new Content(content))
+        )
         match = @m1.getFullMatch()
       )
       
@@ -190,7 +193,7 @@ module.exports = (env) ->
         return __("would send telegram \"%s\"", @message.content.get())
       else
         client = new BotClient({token: TelegramPlugin.getToken()})
-        client.sendMessage(@message)
+        client.sendMessage(@message, true)
   
   class TelegramReceiverDevice extends env.devices.Device
     
@@ -213,15 +216,16 @@ module.exports = (env) ->
       @client.startListener(@listener)
       
       TelegramPlugin.on('cmdRegistered', (cmd) =>
-        @listener.addCommand(cmd)
+        @listener.addRequest(cmd)
       )
       TelegramPlugin.on('cmdDeregistered', (cmd) =>
-        @listener.removeCommand(cmd)
+        @listener.removeRequest(cmd)
       )
       
     destroy: ->
       @client.stopListener(@listener) 
       super()
+  
   
   class Listener
   
@@ -229,42 +233,44 @@ module.exports = (env) ->
       @id = id
       @client = null
       @authenticated = []
-      @commands = [{
-          command: "help",
+      @requests = []
+      
+      @requests = [{
+          request: "help",
           action: -> return null
           protected: false
           type: "base"
           response: (msg) =>
             text = "Default commands: \n"
-            for cmd in @commands
-              if cmd.type is "base"
-                text += "\t" + cmd.command
-                if cmd.command is "get device"
+            for req in @requests
+              if req.type is "base"
+                text += "\t" + req.request
+                if req.request is "get device"
                   text += " <device name | device id>"
                 text += "\n"
             text += "\nRule commands: \n"
-            for cmd in @commands
-              if cmd.type is "rule"
-                text += "\t" + cmd.command + "\n"
+            for req in @requests
+              if req.type is "rule"
+                text += "\t" + req.request + "\n"
             return text
         },
         {
-          command: "execute", 
+          request: "execute", 
           action: => 
-            logRequest("auth_error", "Command 'execute' received; This is not allowed for security reasons") # It's a trap !!
+            logRequest("auth_error", "request 'execute' received; This is not allowed for security reasons") # It's a trap !!
             return null
           protected: false
           type: "restricted",
           response: (msg) ->
-            text = "Command 'execute' received; This is not allowed for security reasons"
+            text = "request 'execute' received; This is not allowed for security reasons"
             return text
         },
         {
-          command: "list devices"
+          request: "list devices"
           action: -> return null
           protected: true
           type: "base"
-          response: (msg) -> 
+          response: (msg) ->
             devices = TelegramPlugin.getDevices()
             text = 'Devices :\n'
             for dev in devices
@@ -272,7 +278,7 @@ module.exports = (env) ->
             return text
         },
         {
-          command: "get device"
+          request: "get device"
           action: -> return null
           protected: true
           type: "base"
@@ -284,8 +290,9 @@ module.exports = (env) ->
                 text = 'Name: ' + dev.name + " \tID: " + dev.id + " \tType: " +  dev.constructor.name + "\n"
                 for name of dev.attributes
                   text += '\t\t' + name.charAt(0).toUpperCase() + name.slice(1) + ": " + dev.getLastAttributeValue(name) + "\n\n"
-                return text
-            return "device not found"
+                message.addContent(new Content(text))
+                return message
+            return text
         }]
       
     start: (@client) =>
@@ -294,111 +301,104 @@ module.exports = (env) ->
       
     enableRequests: () =>
       @client.on('text', (msg) =>
-        name = senderName(msg.from)
         sender = TelegramPlugin.getSender(msg.from.id.toString())
-        match = false
-        message = msg.text.toLowerCase()
-        type = "base"   
-        logRequest(type, "Received message: '" + msg.text + "'")
         
+        type = "base"
+        logRequest(type, "Received request: '" + msg.text + "'")
         
         # auth logic
         if !sender.isAdmin() # Lord Vader force-chokes you !!
-          logRequest("auth_error", "Received message: '" + msg.text + "' from " + name + ". This user is not authorized!")
+          logRequest("auth_denied", sender.getName() + " is not authorized. Terminating request")
           return
-          
+        
         date = new Date()
+        client = new BotClient({token: TelegramPlugin.getToken()})
+        response = new MessageFactory("text")
+        response.addRecipient(sender)
+        
         if TelegramPlugin.getDeviceById(@id).config.secret is msg.text # Face Vader you must!
           @authenticated.push {id: sender.getId(), time: date.getTime()}
-          @client.sendMessage(sender.getId(), "Passcode correct, timeout set to " + TelegramPlugin.getDeviceById(@id).config.auth_timeout + " minutes. You can now issue requests", msg.message_id)
+          response.addContent(new Content("Passcode correct, timeout set to " + TelegramPlugin.getDeviceById(@id).config.auth_timeout + " minutes. You can now issue requests"))
+          client.sendMessage(response)
           logRequest("auth_success", sender.getName() + " successfully authenticated")
           return
         
         for auth in @authenticated
           if auth.id is sender.getId()
             if auth.time < (date.getTime()-(TelegramPlugin.getDeviceById(@id).config.auth_timeout*60000)) # You were carbon frozen for too long, Solo! Solo! Too Nakma Noya Solo!
-              sender.setAuthenticated(false) 
-              #return
+              sender.setAuthenticated(false)
             else
               sender.setAuthenticated(true)
         
+        
+        request = msg.text.toLowerCase()
+        match = false
         # command logic
         if sender.isAuthenticated()  # May the force be with you
-          for cmd in @commands
-            if cmd.command.toLowerCase() is message.slice(0, cmd.command.length) # test request against base commands and 'receive "command"' predicate in ruleset
-              cmd.action()
-              for chunk in @messageChunks(cmd.response(message))
-                @client.sendMessage(msg.from.id, chunk, msg.message_id)
-              type = cmd.type
+          for req in @requests
+            if req.request.toLowerCase() is request.slice(0, req.request.length) # test request against base commands and 'receive "command"' predicate in ruleset
+              req.action()
+              response.addContent(new Content(req.response(request)))
+              client.sendMessage(response)
+              type = req.type
               match = true
               break
           
           if !match
+            type = "action"
             for act in TelegramPlugin.getActionProviders()
               context = createDummyParseContext()
-              han = act.parseAction(msg.text, context) # test if message is a valid action, e.g. "turn on switch-room1"
+              han = act.parseAction(request, context) # test if request is a valid action, e.g. "turn on switch-room1"
               if han?
                 han.actionHandler.executeAction()
-                @client.sendMessage(msg.from.id, "Action '" + message + "' executed", msg.message_id)
-                type = "action"
+                response.addContent(new Content("Request '" + request + "' executed"))
+                client.sendMessage(response)
                 match = true
                 break
           
           if !match
-            @client.sendMessage(msg.from.id, "'" + message + "' is not a valid command", msg.message_id)
-            type = "base"
+            response.addContent(new Content("'" + request + "' is not a valid request"))
+            client.sendMessage(response)
           
-          logRequest(type, "Request '" + message + "' received from " + name)
+          logRequest(type, "Request '" + request + "' received from " + sender.getName())
           return
         else # Vader face you must
-          @client.sendMessage(sender.getId(), "Please provide the passcode first and reissue your request after", msg.message_id)
+          response.addContent(new Content("Please provide the passcode first and reissue your request after"))
+          client.sendMessage(response)
       )
-
-    messageChunks: (msg) ->
-      return msg.match(/[\s\S]{1,2048}/g)
     
     logRequest = (type, msg) ->
       switch type
         when "base" then env.logger.debug msg
-        when "restricted" then env.logger.error msg
-        when "auth_error" then env.logger.error msg
+        when "restricted" then env.logger.warn msg
+        when "auth_denied" then env.logger.warn msg
         else env.logger.info msg
-        
-    senderName = (from) =>
-      sender = null
-      if from.first_name?
-        sender = from.first_name
-      else
-        sender = from.username
-        return sender
-      if from.last_name?
-        sender += " " + from.last_name
-      return sender
     
     createDummyParseContext = ->
       variables = {}
       functions = {}
       return M.createParseContext(variables, functions)
       
-    addCommand: (cmd) =>
+    addRequest: (req) =>
       obj = {
-        command: cmd.getCommand()
-        action: (msg) => cmd.emit('change', 'event')
+        request: req.getCommand()
+        action: (msg) => req.emit('change', 'event')
         protected: true
         type: "rule"
-        response: (msg) => return "Rule condition '" + obj.command + "' triggered"
+        response: (msg) => 
+          return "Rule condition '" + obj.request + "' triggered"
       }
-      @commands.push obj
-      env.logger.debug "added command ", obj.command
+      @requests.push obj
+      env.logger.debug "added command ", obj.request
           
-    changeCommand: (id, command) =>
+    changeRequest: (id, request) =>
       
-    removeCommand: (cmd) =>
-      @commands.splice(@commands.indexOf(cmd),1)
+    removeRequest: (req) =>
+      @commands.splice(@requests.indexOf(req),1)
       
     stop: (@client) =>
       @client.disconnect()
-  
+    
   class BotClient
     
     constructor: (options) ->
@@ -411,7 +411,7 @@ module.exports = (env) ->
     startListener: (listener) =>
       listener.start(@client)
     
-    sendMessage: (message) =>
+    sendMessage: (message, log) =>
       return new Promise( (resolve, reject) =>
         message.send(@client).then( (results) =>
           Promise.some(results, results.length).then( (result) =>
@@ -423,19 +423,33 @@ module.exports = (env) ->
           @base.error err
         )
       )
-        
+      
+  class Logger
+    types = {
+      debug: env.logger.debug
+      restricted: env.logger.warn
+      auth_denied: env.logger.warn  
+    }
+    
+    constructor = (type, msg) ->
+      types[type] msg
+    
   class Message
   
     constructor: (options) ->
       @recipients = []
       @content = null
     
-    processResult: (method, message, recipient) =>
+    processResult: (method, message, recipient, log  = false) =>
         method.then ((response) =>
-          env.logger.info __("Telegram \"%s\" to %s successfully sent", message, recipient)
+          log_msg = __("Sending Telegram \"%s\" to %s: success", message, recipient)
+          if !log
+            env.logger.debug log_msg
+          else
+            env.logger.info log_msg
           return Promise.resolve "success"
         ), (err) =>
-          env.logger.error __("Sending Telegram \"%s\" to %s failed, reason: %s", message, recipient, err.description)
+          env.logger.error __("Sending Telegram \"%s\" to %s: failed; reason: %s", message, recipient, err.description)
           return Promise.reject err
     
     addRecipient: (recipient) =>
@@ -443,43 +457,50 @@ module.exports = (env) ->
     
     addContent: (content) =>
       @content = content
+    
+    messageParts: (msg) =>
+      return msg.match(/[\s\S]{1,2048}/g)
       
   class TextMessage extends Message
    
-    send: (@client) =>
-      @content.validateString()
+    send: (@client, log) =>
+      @content.getString()
         .then( (message) =>
-          return @recipients.map( (r) => @processResult(@client.sendMessage(r.getId(), message), message, r.getName()))
+          return @recipients.map( (r) =>
+            @messageParts(message).map( (part) => 
+              @processResult(@client.sendMessage(r.getId(), part), part, r.getName(), log)
+            )
+          )   
         ).catch( (err) =>
-          Promise.reject err
+          Promise.reject "Cannot send text message via Telegram", err
         )
-      
+        
   class VideoMessage extends Message
   
-    send: (@client) =>
-      @content.validateMedia()
+    send: (@client, log) =>
+      @content.getMedia()
         .then( (file) =>
-          return @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), file), file, r.getName()))
+          return @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), file), file, r.getName(), log))
         ).catch( (err) =>
           Promise.reject "Cannot send media via Telegram", err
         )
       
   class AudioMessage extends Message
     
-    send: (@client) =>
-      @content.validateMedia()
+    send: (@client, log) =>
+      @content.getMedia()
         .then( (file) =>
-          return @recipients.map( (r) => @processResult(@client.sendAudio(r.getId(), file), file, r.getName()))
+          return @recipients.map( (r) => @processResult(@client.sendAudio(r.getId(), file), file, r.getName(), log))
         ).catch((err) =>
           Promise.reject "Cannot send media via Telegram", err
         )
       
   class PhotoMessage extends Message
     
-    send: (@client) =>
-      @content.validateMedia()
+    send: (@client, log) =>
+      @content.getMedia()
         .then( (file) =>
-            return @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), file), r.getName()))
+            return @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), file), r.getName(), log))
         ).catch( (err) =>
             Promise.reject "Cannot send media via Telegram", err
         )
@@ -558,36 +579,20 @@ module.exports = (env) ->
     
   class Content
     
-    constructor: (@input) ->
-      @base = commons.base @, "TelegramActionHandler"
-        
-    get: () =>
-      return new Promise((resolve, reject) =>
-        TelegramPlugin.evaluateStringExpression(@input).then( (content) =>
-          resolve content
-        ).catch( (error) =>
-          reject error
-        )
-      ).catch((error) =>
-        @base.rejectWithErrorString Promise.reject, error
-      )
-    
+    constructor: (input) ->
+      @input = input
+      @base = commons.base @, "TelegramContent"
+   
     set: (@input) ->
     
-    validateString: () =>
+    getString: () =>
+      if typeof @input is "string"
+        Promise.resolve @input
+      else
+        Promise.reject __("\"%s\" is not a string", @input)
 
-      @get()
-        .then( (value) =>
-          if typeof value is "string"
-            Promise.resolve value
-          else
-            Promise.reject __("\"%s\" is not a string", value)
-        ).catch( (err) =>
-          Promise.reject err
-        )
-      
-    validateMedia: () ->
-      @validateString()
+    getMedia: () ->
+      @getString()
         .then( (file) =>
           if !fs.existsSync(file)
             err = __("File: \"%s\" does not exist", file)

@@ -10,6 +10,10 @@ module.exports = {
       description: "API token for your Bot (Obtained via BotFather)"
       type: "string"
       default: "123456789:ABC1AaBcd12AbBCD1BcCaB012CCCCClAbcA"
+    debug:
+      description: "Enable debug output"
+      type: "boolean"
+      default: false
     recipients:
       description: "Additional Telegram recipients"
       type: "array"
