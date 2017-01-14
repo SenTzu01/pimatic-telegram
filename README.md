@@ -8,7 +8,7 @@ After installation the following actions and predicates will be made available i
 
 Action Syntax: 
 
-- send telegram <text | video | audio | photo> to [1stRecipient ... nthRecipient] <"text with $variables"  | "/local/path/with/$variables/to/file">
+- send <text | video | audio | photo | gps> telegram  to [1stRecipient ... nthRecipient] <"text with $variables"  | "/local/path/with/$variables/to/file">
 
 Specifying recipients is optional, if you do not provide recipients, a message will be sent to all defined recipients
 Specifiying a message type is optional, when not specifying a type a text message is assumed
@@ -37,7 +37,7 @@ Messaging command examples:
 
 Features:
 ========================
-- Send text, audio, video or photo messages to your (mobile) device equipped with the Telegram messaging client
+- Send text, audio, video, photo or location (GPS coord) messages to your (mobile) device equipped with the Telegram messaging client
 - Messages may be of types: text, video, audio, or photo 
 - Define multiple recipients in your Pimatic configuration via the user interface or config.json
 - Enable / disable existing recipients
