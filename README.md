@@ -8,7 +8,7 @@ After installation the following actions and predicates will be made available i
 
 Action Syntax: 
 
-- send <text | video | audio | photo | gps> telegram  to [1stRecipient ... nthRecipient] <"text with $variables"  | "/local/path/with/$variables/to/file">
+- send < text | video | audio | photo | gps > telegram  to [1stRecipient ... nthRecipient] <"text with $variables"  | "/local/path/with/$variables/to/file">
 
 Specifying recipients is optional, if you do not provide recipients, a message will be sent to all defined recipients
 Specifiying a message type is optional, when not specifying a type a text message is assumed
