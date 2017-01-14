@@ -86,11 +86,9 @@ module.exports = (env) ->
       return @framework.ruleManager.actionProviders
       
     registerCmd: (@cmd) =>
-      env.logger.debug "Registering request: '#{@cmd.getCommand()}'"
       @emit "cmdRegistered", @cmd
     
     deregisterCmd: (@cmd) =>
-      env.logger.debug "Deregistering request: '#{@cmd.getCommand()}'"
       @emit "cmdDeregistered", @cmd
       
   class TelegramPredicateProvider extends env.predicates.PredicateProvider
@@ -313,6 +311,7 @@ module.exports = (env) ->
         response.addRecipient(TelegramPlugin.getSender(msg.from.id.toString()))
         response.addContent(new Content('Bot commands (/<cmd>) are not implemented'))
         client.sendMessage(response)
+        return true
       )
       
       @client.on('text', (msg) =>
@@ -350,6 +349,7 @@ module.exports = (env) ->
         match = false
         # command logic
         if sender.isAuthenticated()  # May the force be with you
+          env.logger.info "Request '" + request + "' received from " + sender.getName()
           for req in @requests
             if req.request.toLowerCase() is request.slice(0, req.request.length) # test request against base commands and 'receive "command"' predicate in ruleset
               req.action()
@@ -372,12 +372,12 @@ module.exports = (env) ->
           if !match
             response.addContent(new ContentFactory("text", "'" + request + "' is not a valid request"))
             client.sendMessage(response)
-          
-          env.logger.info "Request '" + request + "' received from " + sender.getName()
+            return
           return
         else # Vader face you must
           response.addContent(new ContentFactory("text", "Please provide the passcode first and reissue your request after"))
           client.sendMessage(response)
+          return
       )
       
     createDummyParseContext = ->
@@ -395,13 +395,13 @@ module.exports = (env) ->
           return "Rule condition '" + obj.request + "' triggered"
       }
       @requests.push obj
-      env.logger.debug "Added rule predicate '", obj.request, "' to listener"
+      env.logger.info "Telegram listener enabled ruleset trigger: '", obj.request, "'"
           
     changeRequest: (id, request) =>
       
     removeRequest: (req) =>
       @commands.splice(@requests.indexOf(req),1)
-      env.logger.debug "Removed rule predicate '", obj.request, "' from listener"
+      env.logger.info "Telegram listener disabled ruleset trigger: '", obj.request, "' "
       
     stop: (@client) =>
       @client.disconnect()
@@ -409,7 +409,7 @@ module.exports = (env) ->
   class BotClient
     
     constructor: (options) ->
-      @base = commons.base @, "TelegramActionHandler"
+      @base = commons.base @, "TelegramBotClient"
       @client = new TelegramBotClient(options)
     
     stopListener: (listener) =>
