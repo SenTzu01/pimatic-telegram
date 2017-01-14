@@ -466,7 +466,7 @@ module.exports = (env) ->
             )
           )   
         ).catch( (err) =>
-          Promise.reject "Cannot send text message via Telegram", err
+          Promise.reject "Cannot send text message via Telegram: ", err
         )
         
   class VideoMessage extends Message
@@ -476,7 +476,7 @@ module.exports = (env) ->
         .then( (file) =>
           return @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), file), file, r.getName(), log))
         ).catch( (err) =>
-          Promise.reject "Cannot send media via Telegram", err
+          Promise.reject "Cannot send media via Telegram: ", err
         )
       
   class AudioMessage extends Message
@@ -486,7 +486,7 @@ module.exports = (env) ->
         .then( (file) =>
           return @recipients.map( (r) => @processResult(@client.sendAudio(r.getId(), file), file, r.getName(), log))
         ).catch((err) =>
-          Promise.reject "Cannot send media via Telegram", err
+          Promise.reject "Cannot send media via Telegram: ", err
         )
       
   class PhotoMessage extends Message
@@ -496,8 +496,17 @@ module.exports = (env) ->
         .then( (file) =>
             return @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), file), r.getName(), log))
         ).catch( (err) =>
-            Promise.reject "Cannot send media via Telegram", err
+            Promise.reject "Cannot send media via Telegram: ", err
         )
+  
+   class LocationMessage extends Message
+    
+    send: (@client) =>
+      @content.getGPS().then( (gps) =>
+        return @recipients.map( (r) => @processResult(@client.sendLocation(r.getId(), [gps[0], gps[1]]), gps, r.getName()))
+      ).catch( (err) =>
+          Promise.reject "Cannot send coordinates via telegram: ", err
+      )
       
   class MessageFactory
     types = {
@@ -505,6 +514,7 @@ module.exports = (env) ->
       video: VideoMessage
       audio: AudioMessage
       photo: PhotoMessage
+      gps: LocationMessage
     }
     
     @getTypes: -> return Object.keys(types)
@@ -594,6 +604,19 @@ module.exports = (env) ->
             Promise.reject err
           else
             Promise.resolve file
+        ).catch( (err) =>
+          @base.error err
+          Promise.reject err
+        )
+    
+    getGPS: () ->
+      @getString()
+        .then( (gps) =>
+          coord = gps.split(';')
+          if (!isNaN(coord[0]) && coord[0].toString().indexOf('.') isnt -1) and (!isNaN(coord[1]) && coord[1].toString().indexOf('.') isnt -1)
+            Promise.resolve coord
+          else
+            Promise.reject __("'%s' and '%s' are not valid GPS coordinates", coord[0], coord[1])
         ).catch( (err) =>
           @base.error err
           Promise.reject err
