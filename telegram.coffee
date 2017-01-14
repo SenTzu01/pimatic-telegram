@@ -144,14 +144,16 @@ module.exports = (env) ->
     constructor: (@framework, @config) ->
       
     parseAction: (input, context) =>
+      type = null
       message = null
       match = null
       
       # Action arguments: send [[telegram] | [text(default) | video | audio | photo] telegram to ]] [1strecipient1 ... Nthrecipient] "message | path | url"
       @m1 = M(input, context)
       @m1.match('send ')
-        .match(MessageFactory.getTypes().map( (t) => t + ' '), (@m1, type) => 
-          message = new MessageFactory(type.trim())
+        .match(MessageFactory.getTypes().map( (t) => t + ' '), (@m1, t) =>
+          type = t.trim()
+          message = new MessageFactory(type)
         )
         .match('telegram ')
         .match('to ', optional: yes, (@m1) =>
@@ -168,7 +170,8 @@ module.exports = (env) ->
         )
       @m1.matchStringWithVars( (@m1, expr) =>
         @framework.variableManager.evaluateStringExpression(expr).then( (content) =>
-          message.addContent(new Content(content))
+          #message.addContent(new Content(content))
+          message.addContent(new ContentFactory(type, content))
         )
         match = @m1.getFullMatch()
       )
@@ -293,9 +296,8 @@ module.exports = (env) ->
                 text = 'Name: ' + dev.name + " \tID: " + dev.id + " \tType: " +  dev.constructor.name + "\n"
                 for name of dev.attributes
                   text += '\t\t' + name.charAt(0).toUpperCase() + name.slice(1) + ": " + dev.getLastAttributeValue(name) + "\n\n"
-                message.addContent(new Content(text))
-                return message
-            return text
+                return text
+            return "device not found"
         }]
       
     start: (@client) =>
@@ -320,9 +322,9 @@ module.exports = (env) ->
         
         if TelegramPlugin.getDeviceById(@id).config.secret is msg.text # Face Vader you must!
           @authenticated.push {id: sender.getId(), time: date.getTime()}
-          response.addContent(new Content("Passcode correct, timeout set to " + TelegramPlugin.getDeviceById(@id).config.auth_timeout + " minutes. You can now issue requests"))
+          response.addContent(new ContentFactory("text", "Passcode correct, timeout set to " + TelegramPlugin.getDeviceById(@id).config.auth_timeout + " minutes. You can now issue requests"))
           client.sendMessage(response)
-          env.logger.info "auth_success", sender.getName() + " successfully authenticated"
+          env.logger.info sender.getName() + " successfully authenticated"
           return
         
         for auth in @authenticated
@@ -340,7 +342,7 @@ module.exports = (env) ->
           for req in @requests
             if req.request.toLowerCase() is request.slice(0, req.request.length) # test request against base commands and 'receive "command"' predicate in ruleset
               req.action()
-              response.addContent(new Content(req.response(request)))
+              response.addContent(new ContentFactory("text", req.response(request)))
               client.sendMessage(response)
               match = true
               break
@@ -351,19 +353,19 @@ module.exports = (env) ->
               han = act.parseAction(request, context) # test if request is a valid action, e.g. "turn on switch-room1"
               if han?
                 han.actionHandler.executeAction()
-                response.addContent(new Content("Request '" + request + "' executed"))
+                response.addContent(new ContentFactory("text", "Request '" + request + "' executed"))
                 client.sendMessage(response)
                 match = true
                 break
           
           if !match
-            response.addContent(new Content("'" + request + "' is not a valid request"))
+            response.addContent(new ContentFactory("text", "'" + request + "' is not a valid request"))
             client.sendMessage(response)
           
           env.logger.info "Request '" + request + "' received from " + sender.getName()
           return
         else # Vader face you must
-          response.addContent(new Content("Please provide the passcode first and reissue your request after"))
+          response.addContent(new ContentFactory("text", "Please provide the passcode first and reissue your request after"))
           client.sendMessage(response)
       )
     
@@ -458,7 +460,7 @@ module.exports = (env) ->
   class TextMessage extends Message
    
     send: (@client, log) =>
-      @content.getString()
+      @content.get()
         .then( (message) =>
           return @recipients.map( (r) =>
             @messageParts(message).map( (part) => 
@@ -466,62 +468,48 @@ module.exports = (env) ->
             )
           )   
         ).catch( (err) =>
-          Promise.reject "Cannot send text message via Telegram: ", err
+          Promise.reject "Cannot send text message via Telegram"
         )
         
   class VideoMessage extends Message
   
     send: (@client, log) =>
-      @content.getMedia()
+      @content.get()
         .then( (file) =>
           return @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), file), file, r.getName(), log))
         ).catch( (err) =>
-          Promise.reject "Cannot send media via Telegram: ", err
+          Promise.reject "Cannot send media via Telegram"
         )
       
   class AudioMessage extends Message
     
     send: (@client, log) =>
-      @content.getMedia()
+      @content.get()
         .then( (file) =>
           return @recipients.map( (r) => @processResult(@client.sendAudio(r.getId(), file), file, r.getName(), log))
         ).catch((err) =>
-          Promise.reject "Cannot send media via Telegram: ", err
+          Promise.reject "Cannot send media via Telegram"
         )
       
   class PhotoMessage extends Message
     
     send: (@client, log) =>
-      @content.getMedia()
+      @content.get()
         .then( (file) =>
             return @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), file), r.getName(), log))
         ).catch( (err) =>
-            Promise.reject "Cannot send media via Telegram: ", err
+            Promise.reject "Cannot send media via Telegram"
         )
   
    class LocationMessage extends Message
     
     send: (@client) =>
-      @content.getGPS().then( (gps) =>
+      @content.get().then( (gps) =>
         return @recipients.map( (r) => @processResult(@client.sendLocation(r.getId(), [gps[0], gps[1]]), gps, r.getName()))
       ).catch( (err) =>
-          Promise.reject "Cannot send coordinates via telegram: ", err
+          Promise.reject "Cannot send coordinates via telegram"
       )
-      
-  class MessageFactory
-    types = {
-      text: TextMessage
-      video: VideoMessage
-      audio: AudioMessage
-      photo: PhotoMessage
-      gps: LocationMessage
-    }
-    
-    @getTypes: -> return Object.keys(types)
-    
-    constructor: (type, args) ->
-      return new types[type] args
-       
+            
   class Recipient
     
     constructor: (recipient) ->
@@ -589,14 +577,27 @@ module.exports = (env) ->
    
     set: (@input) ->
     
-    getString: () =>
+    get: () =>
       if typeof @input is "string"
         Promise.resolve @input
       else
         Promise.reject __("\"%s\" is not a string", @input)
 
-    getMedia: () ->
-      @getString()
+  class TextContent extends Content
+    constructor: (input) ->
+      super(input)
+      @base = commons.base @, "TelegramTextContent"
+      
+    get: () ->
+      super()
+      
+  class MediaContent extends Content
+    constructor: (input) ->
+      super(input)
+      @base = commons.base @, "TelegramMediaContent"
+      
+    get: () ->
+      super()
         .then( (file) =>
           if !fs.existsSync(file)
             err = __("File: \"%s\" does not exist", file)
@@ -608,9 +609,14 @@ module.exports = (env) ->
           @base.error err
           Promise.reject err
         )
-    
-    getGPS: () ->
-      @getString()
+  
+  class LocationContent extends Content
+    constructor: (input) ->
+      super(input)
+      @base = commons.base @, "TelegramLocationContent"
+      
+    get: () ->
+      super()
         .then( (gps) =>
           coord = gps.split(';')
           if (!isNaN(coord[0]) && coord[0].toString().indexOf('.') isnt -1) and (!isNaN(coord[1]) && coord[1].toString().indexOf('.') isnt -1)
@@ -621,7 +627,35 @@ module.exports = (env) ->
           @base.error err
           Promise.reject err
         )
+   
+   class MessageFactory
+    types = {
+      text: TextMessage
+      video: VideoMessage
+      audio: AudioMessage
+      photo: PhotoMessage
+      gps: LocationMessage
+    }
     
+    @getTypes: -> return Object.keys(types)
+    
+    constructor: (type, args) ->
+      return new types[type] args
+      
+   class ContentFactory
+    types = {
+      text: Content
+      video: MediaContent
+      audio: MediaContent
+      photo: MediaContent
+      gps: LocationContent
+    }
+    
+    @getTypes: -> return Object.keys(types)
+    
+    constructor: (type, args) ->
+      return new types[type] args
+      
   module.exports.TelegramActionHandler = TelegramActionHandler
   TelegramPlugin = new Telegram()
   return TelegramPlugin
