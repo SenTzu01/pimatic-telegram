@@ -110,7 +110,7 @@ Alternatively add it to the Plugin section of your config.json:
       "userChatId": "<user_id from previous step>",
       "enabled": true,
       "admin": false 
-    }
+    }]
 }
 ````
 <i> You can specify multiple recipients. Enabled should be set to true for a recipient to receive messages</i>
