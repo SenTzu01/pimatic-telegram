@@ -233,7 +233,6 @@ module.exports = (env) ->
       @client.stopListener(@listener) 
       super()
   
-  
   class Listener
   
     constructor: (id) ->
@@ -419,17 +418,7 @@ module.exports = (env) ->
           @base.error err
         )
       )
-      
-  class Logger
-    types = {
-      debug: env.logger.debug
-      restricted: env.logger.warn
-      auth_denied: env.logger.warn  
-    }
-    
-    constructor = (type, msg) ->
-      types[type] msg
-    
+        
   class Message
   
     constructor: (options) ->
@@ -542,33 +531,7 @@ module.exports = (env) ->
       
     setAuthenticated: (val) =>
       @authenticated = val
-    
-  class RecipientCollection
-    constructor: (load = false) ->
-      @collection = []
-      if load
-        @getAll()
-    
-    add: (recipient) =>
-        @collection.push recipient
-    
-    getAll: () ->
-      config = TelegramPlugin.getConfig()
-      env.logger.debug config
-      @add(new Recipient(r)) for r in config.recipients
-    
-    getByName: (name) =>
-      for r in @collection
-        do (r) =>
-          return r if r.name is name
-      return false
-    
-    getById: (id) =>
-      for r in @collection
-        do (r) =>
-          return r if r.userChatId is id
-      return false
-    
+        
   class Content
     
     constructor: (input) ->
@@ -628,7 +591,7 @@ module.exports = (env) ->
           Promise.reject err
         )
    
-   class MessageFactory
+  class MessageFactory
     types = {
       text: TextMessage
       video: VideoMessage
@@ -642,7 +605,7 @@ module.exports = (env) ->
     constructor: (type, args) ->
       return new types[type] args
       
-   class ContentFactory
+  class ContentFactory
     types = {
       text: Content
       video: MediaContent
