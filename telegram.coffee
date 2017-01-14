@@ -305,8 +305,19 @@ module.exports = (env) ->
       
     enableRequests: () =>
       env.logger.info "Starting Telegram listener"
+      
+      @client.on('/*', (msg) =>
+        env.logger.debug "Bot command received: ", msg
+        client = new BotClient({token: TelegramPlugin.getToken()})
+        response = new MessageFactory("text")
+        response.addRecipient(TelegramPlugin.getSender(msg.from.id.toString()))
+        response.addContent(new Content('Bot commands (/<cmd>) are not implemented'))
+        client.sendMessage(response)
+      )
+      
       @client.on('text', (msg) =>
-        env.logger.debug "Request received, processing..."
+        return if msg.text.charAt(0) is '/'
+        env.logger.debug "Request '", msg.text, "' received, processing..."
         sender = TelegramPlugin.getSender(msg.from.id.toString())
         
         # auth logic
@@ -326,6 +337,7 @@ module.exports = (env) ->
           env.logger.info sender.getName() + " successfully authenticated"
           return
         
+        env.logger.debug @authenticated
         for auth in @authenticated
           if auth.id is sender.getId()
             if auth.time < (date.getTime()-(TelegramPlugin.getDeviceById(@id).config.auth_timeout*60000)) # You were carbon frozen for too long, Solo! Solo! Too Nakma Noya Solo!
@@ -367,7 +379,7 @@ module.exports = (env) ->
           response.addContent(new ContentFactory("text", "Please provide the passcode first and reissue your request after"))
           client.sendMessage(response)
       )
-    
+      
     createDummyParseContext = ->
       variables = {}
       functions = {}
