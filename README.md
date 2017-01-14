@@ -13,32 +13,33 @@ Pimatic plugin to provide bi-directional integration with Telegram, the free mes
 - Two factor authentication (Trusted sender list maintained in Pimatic, with session password)
 - User-configurable authentication timeout
 - Polling mechanism prevents exposing your Pimatic environment
+- Allowed file formats depend on Telegram supported formats, .mp3 (audio), .mp4, .avi (video), .jpg and .png (photo) have been validated
 
 ### Rule syntax and examples: 
 <b>send < text | video | audio | photo | gps > telegram to [ recipient1 recipient2 ... recipientn ] < "text with $variables"  | "/local/path/with/$variables/to/file" | "$latitude;$longitude" ></b><br/>
-and / or:
+and / or:<br/>
 <b>telegram received "user-defined-keyword"</b><br/>
 
-send text telegram to "ALERT! Pimatic detected movement in room: $room while nobody is home! Is someone unexpectedly making you a cup of tea?"
-send video telegram to Owner1 Owner2 "/home/pi/front_door_camera.mp4"
-when it is 08:00 and $phone-child.location is not "School" send gps telegram to Parent1 Parent2 "$phone-child.latitude;$phone-child.longitude"
-when telegram received "turn off heating" then set temp of Thermostat to 15
-<i>If you do not provide recipients, a message will be sent to all enabled recipients</i>
+send text telegram to "ALERT! Pimatic detected movement in room: $room while nobody is home! Is someone unexpectedly making you a cup of tea?"<br/>
+send video telegram to Owner1 Owner2 "/home/pi/front_door_camera.mp4"<br/>
+when it is 08:00 and $phone-child.location is not "School" send gps telegram to Parent1 Parent2 "$phone-child.latitude;$phone-child.longitude"<br/>
+when telegram received "turn off heating" then set temp of Thermostat to 15<br/>
+<i>If you do not provide recipients, a message will be sent to all enabled recipients</i><br>
  
-### Messaging client requests:
-<b>help</b> - lists available built-in commands and user-defined predicates
-<b>list devices</b> - Summary list of all devices
-<b>get device device_name | device_id</b> - get details on a device
-<b>set temp of Thermostat to 15</b> - execute a device action using rule action syntax
-<b>user defined keyword</b> - Triggers a defined rule with the "telegram received "user-defined-keyword" condition
+### Requests:
+<b>help</b> - lists available built-in commands and user-defined predicates</br>
+<b>list devices</b> - Summary list of all devices</br>
+<b>get device device_name | device_id</b> - get details on a device</br>
+<b>set temp of Thermostat to 15</b> - execute a device action using rule action syntax</br>
+<b>user defined keyword</b> - Triggers a defined rule with the "telegram received "user-defined-keyword" condition</br>
 
 
 Preinstallation Requirements
 ========================
-- A Telegram client (Available for various mobile platforms, as well as webbased (www.telegram.org)
+- A Telegram client (www.telegram.org)
 - A Telegram bot
 - Obtain chatID's for all Telegram recipiets you would like to receive messages
-- Allowed file formats depend on Telegram supported formats, .mp3 (audio), .mp4, .avi (video), .jpg and .png (photo) have been validated
+
 
 Installation and Configuration:
 ========================
@@ -50,11 +51,11 @@ Installation and Configuration:
 ### Create a Telegram Bot
 
 - With your Telegram client start a conversation with @BotFather
-- Send a message: /newbot
+- Send a message: <b>/newbot</b>
 - Follow the on-screen instructions
 - When choosing a name for your bot, ensure the name ends in "bot", e.g. MyAwesomePimaticBot
-- After completing the required steps, BotFather will provide a token (similar to this: 784324329:EETRNJU3jQEGWQdjNv3llb4bnDSDREGuuuL)
-- Make sure you copy this token, and keep it secret !
+- After completing the required steps, BotFather will provide a token (similar to this: <b>784324329:EETRNJU3jQEGWQdjNv3llb4bnDSDREGuuuL</b>)
+- <b>Make sure you copy this token, and keep it secret !</b>
 
 ### Obtain your chatID
 
@@ -72,7 +73,7 @@ Installation and Configuration:
       "message_id":12,
       "from":
       {
-        "id":< this is the number you need! >,
+        "id":<this_is_the_number_you_need!>,
         "first_name":"fname","username":"uname"
       },
       "chat":
@@ -105,7 +106,7 @@ Alternatively add it to the Plugin section of your config.json:
   "recipients": [
     {
       "name": "FriendlyName",
-      "userChatId": "<user_id from previous step>"
+      "userChatId": "<user_id from previous step>",
       "enabled": true,
       "admin": false 
     }
@@ -124,7 +125,7 @@ Alternatively add it to the Plugin section of your config.json:
 "recipients": [
   {
     "name": "FriendlyName",
-    "userChatId": "<user_id from previous step>"
+    "userChatId": "<user_id from previous step>",
     "enabled": true,
     "admin": true 
   }
