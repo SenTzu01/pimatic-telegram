@@ -236,10 +236,10 @@ module.exports = (env) ->
       @requests = []
       
       @requests = [{
-          request: "help",
+          request: "help"
+          type: "base"
           action: -> return null
           protected: false
-          type: "base"
           response: (msg) =>
             text = "Default commands: \n"
             for req in @requests
@@ -257,19 +257,18 @@ module.exports = (env) ->
         {
           request: "execute", 
           action: => 
-            logRequest("auth_error", "request 'execute' received; This is not allowed for security reasons") # It's a trap !!
+            env.logger.warn "auth_error", "request 'execute' received; This is not allowed for security reasons" # It's a trap !!
             return null
           protected: false
-          type: "restricted",
           response: (msg) ->
             text = "request 'execute' received; This is not allowed for security reasons"
             return text
         },
         {
           request: "list devices"
+          type: "base"
           action: -> return null
           protected: true
-          type: "base"
           response: (msg) ->
             devices = TelegramPlugin.getDevices()
             text = 'Devices :\n'
@@ -279,9 +278,9 @@ module.exports = (env) ->
         },
         {
           request: "get device"
+          type: "base"
           action: -> return null
           protected: true
-          type: "base"
           response: (msg) => 
             obj = msg.split("device", 4)
             devices = TelegramPlugin.getDevices()
@@ -303,12 +302,9 @@ module.exports = (env) ->
       @client.on('text', (msg) =>
         sender = TelegramPlugin.getSender(msg.from.id.toString())
         
-        type = "base"
-        logRequest(type, "Received request: '" + msg.text + "'")
-        
         # auth logic
         if !sender.isAdmin() # Lord Vader force-chokes you !!
-          logRequest("auth_denied", sender.getName() + " is not authorized. Terminating request")
+          env.logger.warn "auth_denied", sender.getName() + " is not authorized. Terminating request"
           return
         
         date = new Date()
@@ -320,7 +316,7 @@ module.exports = (env) ->
           @authenticated.push {id: sender.getId(), time: date.getTime()}
           response.addContent(new Content("Passcode correct, timeout set to " + TelegramPlugin.getDeviceById(@id).config.auth_timeout + " minutes. You can now issue requests"))
           client.sendMessage(response)
-          logRequest("auth_success", sender.getName() + " successfully authenticated")
+          env.logger.info "auth_success", sender.getName() + " successfully authenticated"
           return
         
         for auth in @authenticated
@@ -340,12 +336,10 @@ module.exports = (env) ->
               req.action()
               response.addContent(new Content(req.response(request)))
               client.sendMessage(response)
-              type = req.type
               match = true
               break
           
           if !match
-            type = "action"
             for act in TelegramPlugin.getActionProviders()
               context = createDummyParseContext()
               han = act.parseAction(request, context) # test if request is a valid action, e.g. "turn on switch-room1"
@@ -360,19 +354,12 @@ module.exports = (env) ->
             response.addContent(new Content("'" + request + "' is not a valid request"))
             client.sendMessage(response)
           
-          logRequest(type, "Request '" + request + "' received from " + sender.getName())
+          env.logger.info "Request '" + request + "' received from " + sender.getName()
           return
         else # Vader face you must
           response.addContent(new Content("Please provide the passcode first and reissue your request after"))
           client.sendMessage(response)
       )
-    
-    logRequest = (type, msg) ->
-      switch type
-        when "base" then env.logger.debug msg
-        when "restricted" then env.logger.warn msg
-        when "auth_denied" then env.logger.warn msg
-        else env.logger.info msg
     
     createDummyParseContext = ->
       variables = {}
