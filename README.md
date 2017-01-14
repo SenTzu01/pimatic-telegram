@@ -27,6 +27,7 @@ Rule examples:
 - 'send telegram KingOfMyCastle "ALERT! Pimatic detected movement in room: $room while nobody is home! You may want to check if someone is unexpectely making you a cup of tea"'
 - 'send video telegram to KingOfMyCastle QueenofMyCastle "/home/pi/front_door_camera.mp4"'
 - 'when telegram received "turn off heating" then set temp of Thermostat to 15'
+- 'when it is 08:00 and $phone-child.location is not "School" send gps telegram to parent "$phone-child.latitude;$phone-child.longitude"
 
 Messaging command examples:
 - 'help' - lists available built-in commands and user-defined predicates
