@@ -20,10 +20,11 @@ Pimatic plugin to provide bi-directional integration with Telegram, the free mes
 and / or:<br/>
 <b>telegram received "user-defined-keyword"</b><br/>
 
-send text telegram to "ALERT! Pimatic detected movement in room: $room while nobody is home! Is someone unexpectedly making you a cup of tea?"<br/>
-send video telegram to Owner1 Owner2 "/home/pi/front_door_camera.mp4"<br/>
-when it is 08:00 and $phone-child.location is not "School" send gps telegram to Parent1 Parent2 "$phone-child.latitude;$phone-child.longitude"<br/>
-when telegram received "turn off heating" then set temp of Thermostat to 15<br/>
+- send text telegram to "ALERT! Pimatic detected movement in room: $room while nobody is home! Is someone unexpectedly making you a cup of tea?"<br/>
+- send video telegram to Owner1 Owner2 "/home/pi/front_door_camera.mp4"<br/>
+- when it is 08:00 and $phone-child.location is not "School" send gps telegram to Parent1 Parent2 "$phone-child.latitude;$phone-child.longitude"<br/>
+- when telegram received "turn off heating" then set temp of Thermostat to 15<br/>
+
 <i>If you do not provide recipients, a message will be sent to all enabled recipients</i><br>
  
 ### Requests:
@@ -73,7 +74,7 @@ Installation and Configuration:
       "message_id":12,
       "from":
       {
-        "id":<this_is_the_number_you_need!>,
+        "id": "<this_is_the_number_you_need!>",
         "first_name":"fname","username":"uname"
       },
       "chat":
