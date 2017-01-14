@@ -27,7 +27,7 @@ and / or:<br/>
 
 <i>If you do not provide recipients, a message will be sent to all enabled recipients</i><br>
  
-### Requests:
+### Requests sent from messaging client to Pimatic:
 <b>help</b> - lists available built-in commands and user-defined predicates</br>
 <b>list devices</b> - Summary list of all devices</br>
 <b>get device device_name | device_id</b> - get details on a device</br>
