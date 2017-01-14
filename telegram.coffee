@@ -607,7 +607,7 @@ module.exports = (env) ->
       
   class ContentFactory
     types = {
-      text: Content
+      text: TextContent
       video: MediaContent
       audio: MediaContent
       photo: MediaContent
