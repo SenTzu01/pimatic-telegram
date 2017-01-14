@@ -86,11 +86,11 @@ module.exports = (env) ->
       return @framework.ruleManager.actionProviders
       
     registerCmd: (@cmd) =>
-      env.logger.debug "Register command: #{@cmd.getCommand()}"
+      env.logger.debug "Registering request: '#{@cmd.getCommand()}'"
       @emit "cmdRegistered", @cmd
     
     deregisterCmd: (@cmd) =>
-      env.logger.debug "Deregister command: #{@cmd.getCommand()}"
+      env.logger.debug "Deregistering request: '#{@cmd.getCommand()}'"
       @emit "cmdDeregistered", @cmd
       
   class TelegramPredicateProvider extends env.predicates.PredicateProvider
@@ -99,7 +99,7 @@ module.exports = (env) ->
       super()
 
     parsePredicate: (input, context) ->
-      fullMatch = null
+      match = null
       nextInput = null
       recCommand = null
 
@@ -110,14 +110,15 @@ module.exports = (env) ->
         .matchString(setCommand)
 
       if m.hadMatch()
-        fullMatch = m.getFullMatch()
+        match = m.getFullMatch()
         nextInput = m.getRemainingInput()
 
-      if fullMatch?
+      if match?
         cassert typeof recCommand is "string"
+        env.logger.debug "Rule matched: '", match, "' and passed to Predicate handler"
         return {
-          token: fullMatch
-          nextInput: input.substring(fullMatch.length)
+          token: match
+          nextInput: input.substring(match.length)
           predicateHandler: new TelegramPredicateHandler(@framework, recCommand)
         }
       else return null
@@ -176,11 +177,13 @@ module.exports = (env) ->
       if match?
         if message.recipients.length < 1
           message.addRecipient(new Recipient(obj)) for obj in @config.recipients when obj.enabled
+        env.logger.debug "Rule matched: '", match, "' and passed to Action handler"
         return {
           token: match
           nextInput: input.substring(match.length)
           actionHandler: new TelegramActionHandler(@framework, @config, message)
         }
+        
       else    
         return null
         
@@ -214,6 +217,7 @@ module.exports = (env) ->
       
       @listener = new Listener(@id)
       @client.startListener(@listener)
+      
       
       TelegramPlugin.on('cmdRegistered', (cmd) =>
         @listener.addRequest(cmd)
@@ -299,7 +303,9 @@ module.exports = (env) ->
       @enableRequests()
       
     enableRequests: () =>
+      env.logger.info "Starting Telegram listener"
       @client.on('text', (msg) =>
+        env.logger.debug "Request received, processing..."
         sender = TelegramPlugin.getSender(msg.from.id.toString())
         
         # auth logic
@@ -376,12 +382,13 @@ module.exports = (env) ->
           return "Rule condition '" + obj.request + "' triggered"
       }
       @requests.push obj
-      env.logger.debug "added command ", obj.request
+      env.logger.debug "Added rule predicate '", obj.request, "' to listener"
           
     changeRequest: (id, request) =>
       
     removeRequest: (req) =>
       @commands.splice(@requests.indexOf(req),1)
+      env.logger.debug "Removed rule predicate '", obj.request, "' from listener"
       
     stop: (@client) =>
       @client.disconnect()
