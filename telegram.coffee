@@ -40,7 +40,6 @@ module.exports = (env) ->
       
     init: (app, @framework, @config) =>
       
-      
       @migrateMainChatId(@framework, @config)
       
       @framework.ruleManager.addPredicateProvider(new TelegramPredicateProvider(@framework, @config))
@@ -56,6 +55,9 @@ module.exports = (env) ->
     evaluateStringExpression: (value) ->
       return @framework.variableManager.evaluateStringExpression(value)
     
+    parseVariableExpression: (value) ->
+      return @framework.variableManager.parseVariableExpression(value)
+      
     getToken: () ->
       return @config.apiToken
     
@@ -84,11 +86,9 @@ module.exports = (env) ->
       return @framework.ruleManager.actionProviders
       
     registerCmd: (@cmd) =>
-      env.logger.debug "Register command: #{@cmd.getCommand()}"
       @emit "cmdRegistered", @cmd
     
     deregisterCmd: (@cmd) =>
-      env.logger.debug "Deregister command: #{@cmd.getCommand()}"
       @emit "cmdDeregistered", @cmd
       
   class TelegramPredicateProvider extends env.predicates.PredicateProvider
@@ -97,7 +97,7 @@ module.exports = (env) ->
       super()
 
     parsePredicate: (input, context) ->
-      fullMatch = null
+      match = null
       nextInput = null
       recCommand = null
 
@@ -108,14 +108,15 @@ module.exports = (env) ->
         .matchString(setCommand)
 
       if m.hadMatch()
-        fullMatch = m.getFullMatch()
+        match = m.getFullMatch()
         nextInput = m.getRemainingInput()
 
-      if fullMatch?
+      if match?
         cassert typeof recCommand is "string"
+        env.logger.debug "Rule matched: '", match, "' and passed to Predicate handler"
         return {
-          token: fullMatch
-          nextInput: input.substring(fullMatch.length)
+          token: match
+          nextInput: input.substring(match.length)
           predicateHandler: new TelegramPredicateHandler(@framework, recCommand)
         }
       else return null
@@ -141,14 +142,16 @@ module.exports = (env) ->
     constructor: (@framework, @config) ->
       
     parseAction: (input, context) =>
+      type = null
       message = null
       match = null
       
       # Action arguments: send [[telegram] | [text(default) | video | audio | photo] telegram to ]] [1strecipient1 ... Nthrecipient] "message | path | url"
       @m1 = M(input, context)
       @m1.match('send ')
-        .match(MessageFactory.getTypes().map( (t) => t + ' '), (@m1, type) => 
-          message = new MessageFactory(type.trim(), {token: @config.apiToken})
+        .match(MessageFactory.getTypes().map( (t) => t + ' '), (@m1, t) =>
+          type = t.trim()
+          message = new MessageFactory(type)
         )
         .match('telegram ')
         .match('to ', optional: yes, (@m1) =>
@@ -163,8 +166,10 @@ module.exports = (env) ->
             )
             i += 1
         )
-      @m1.matchStringWithVars( (@m1, content) =>
-        message.addContent(new Content(content))
+      @m1.matchStringWithVars( (@m1, expr) =>
+        @framework.variableManager.evaluateStringExpression(expr).then( (content) =>
+          message.addContent(new ContentFactory(type, content))
+        )
         match = @m1.getFullMatch()
       )
       
@@ -172,11 +177,13 @@ module.exports = (env) ->
       if match?
         if message.recipients.length < 1
           message.addRecipient(new Recipient(obj)) for obj in @config.recipients when obj.enabled
+        env.logger.debug "Rule matched: '", match, "' and passed to Action handler"
         return {
           token: match
           nextInput: input.substring(match.length)
           actionHandler: new TelegramActionHandler(@framework, @config, message)
         }
+        
       else    
         return null
         
@@ -189,7 +196,7 @@ module.exports = (env) ->
         return __("would send telegram \"%s\"", @message.content.get())
       else
         client = new BotClient({token: TelegramPlugin.getToken()})
-        return client.sendMessage(@message)
+        client.sendMessage(@message, true)
   
   class TelegramReceiverDevice extends env.devices.Device
     
@@ -211,11 +218,12 @@ module.exports = (env) ->
       @listener = new Listener(@id)
       @client.startListener(@listener)
       
+      
       TelegramPlugin.on('cmdRegistered', (cmd) =>
-        @listener.addCommand(cmd)
+        @listener.addRequest(cmd)
       )
       TelegramPlugin.on('cmdDeregistered', (cmd) =>
-        @listener.removeCommand(cmd)
+        @listener.removeRequest(cmd)
       )
       
     destroy: ->
@@ -228,42 +236,43 @@ module.exports = (env) ->
       @id = id
       @client = null
       @authenticated = []
-      @commands = [{
-          command: "help",
+      @requests = []
+      
+      @requests = [{
+          request: "help"
+          type: "base"
           action: -> return null
           protected: false
-          type: "base"
           response: (msg) =>
             text = "Default commands: \n"
-            for cmd in @commands
-              if cmd.type is "base"
-                text += "\t" + cmd.command
-                if cmd.command is "get device"
+            for req in @requests
+              if req.type is "base"
+                text += "\t" + req.request
+                if req.request is "get device"
                   text += " <device name | device id>"
                 text += "\n"
             text += "\nRule commands: \n"
-            for cmd in @commands
-              if cmd.type is "rule"
-                text += "\t" + cmd.command + "\n"
+            for req in @requests
+              if req.type is "rule"
+                text += "\t" + req.request + "\n"
             return text
         },
         {
-          command: "execute", 
+          request: "execute", 
           action: => 
-            logRequest("auth_error", "Command 'execute' received; This is not allowed for security reasons") # It's a trap !!
+            env.logger.warn "'execute' request received; This is not allowed for security reasons" # It's a trap !!
             return null
           protected: false
-          type: "restricted",
           response: (msg) ->
-            text = "Command 'execute' received; This is not allowed for security reasons"
+            text = "request 'execute' received; This is not allowed for security reasons"
             return text
         },
         {
-          command: "list devices"
+          request: "list devices"
+          type: "base"
           action: -> return null
           protected: true
-          type: "base"
-          response: (msg) -> 
+          response: (msg) ->
             devices = TelegramPlugin.getDevices()
             text = 'Devices :\n'
             for dev in devices
@@ -271,10 +280,10 @@ module.exports = (env) ->
             return text
         },
         {
-          command: "get device"
+          request: "get device"
+          type: "base"
           action: -> return null
           protected: true
-          type: "base"
           response: (msg) => 
             obj = msg.split("device", 4)
             devices = TelegramPlugin.getDevices()
@@ -292,116 +301,119 @@ module.exports = (env) ->
       @enableRequests()
       
     enableRequests: () =>
+      env.logger.info "Starting Telegram listener"
+      
+      @client.on('/*', (msg) =>
+        env.logger.debug "Bot command received: ", msg
+        client = new BotClient({token: TelegramPlugin.getToken()})
+        response = new MessageFactory("text")
+        response.addRecipient(TelegramPlugin.getSender(msg.from.id.toString()))
+        response.addContent(new Content('Bot commands (/<cmd>) are not implemented'))
+        client.sendMessage(response)
+        return true
+      )
+      
       @client.on('text', (msg) =>
-        name = senderName(msg.from)
+        return if msg.text.charAt(0) is '/'
+        env.logger.debug "Request '", msg.text, "' received, processing..."
         sender = TelegramPlugin.getSender(msg.from.id.toString())
-        match = false
-        message = msg.text.toLowerCase()
-        type = "base"   
-        logRequest(type, "Received message: '" + msg.text + "'")
-        
         
         # auth logic
         if !sender.isAdmin() # Lord Vader force-chokes you !!
-          logRequest("auth_error", "Received message: '" + msg.text + "' from " + name + ". This user is not authorized!")
+          env.logger.warn "auth_denied", sender.getName() + " is not authorized. Terminating request"
           return
-          
+        
         date = new Date()
+        client = new BotClient({token: TelegramPlugin.getToken()})
+        response = new MessageFactory("text")
+        response.addRecipient(sender)
+        
         if TelegramPlugin.getDeviceById(@id).config.secret is msg.text # Face Vader you must!
           @authenticated.push {id: sender.getId(), time: date.getTime()}
-          @client.sendMessage(sender.getId(), "Passcode correct, timeout set to " + TelegramPlugin.getDeviceById(@id).config.auth_timeout + " minutes. You can now issue requests", msg.message_id)
-          logRequest("auth_success", sender.getName() + " successfully authenticated")
+          response.addContent(new ContentFactory("text", "Passcode correct, timeout set to " + TelegramPlugin.getDeviceById(@id).config.auth_timeout + " minutes. You can now issue requests"))
+          client.sendMessage(response)
+          env.logger.info sender.getName() + " successfully authenticated"
           return
         
         for auth in @authenticated
           if auth.id is sender.getId()
             if auth.time < (date.getTime()-(TelegramPlugin.getDeviceById(@id).config.auth_timeout*60000)) # You were carbon frozen for too long, Solo! Solo! Too Nakma Noya Solo!
-              sender.setAuthenticated(false) 
-              #return
+              sender.setAuthenticated(false)
             else
               sender.setAuthenticated(true)
         
+        
+        request = msg.text.toLowerCase()
+        match = false
         # command logic
         if sender.isAuthenticated()  # May the force be with you
-          for cmd in @commands
-            if cmd.command.toLowerCase() is message.slice(0, cmd.command.length) # test request against base commands and 'receive "command"' predicate in ruleset
-              cmd.action()
-              for chunk in @messageChunks(cmd.response(message))
-                @client.sendMessage(msg.from.id, chunk, msg.message_id)
-              type = cmd.type
+          env.logger.info "Request '" + request + "' received from " + sender.getName()
+          for req in @requests
+            if req.request.toLowerCase() is request.slice(0, req.request.length) # test request against base commands and 'receive "command"' predicate in ruleset
+              req.action()
+              response.addContent(new ContentFactory("text", req.response(request)))
+              client.sendMessage(response)
               match = true
               break
           
           if !match
             for act in TelegramPlugin.getActionProviders()
               context = createDummyParseContext()
-              han = act.parseAction(msg.text, context) # test if message is a valid action, e.g. "turn on switch-room1"
+              han = act.parseAction(request, context) # test if request is a valid action, e.g. "turn on switch-room1"
               if han?
                 han.actionHandler.executeAction()
-                @client.sendMessage(msg.from.id, "Action '" + message + "' executed", msg.message_id)
-                type = "action"
+                response.addContent(new ContentFactory("text", "Request '" + request + "' executed"))
+                client.sendMessage(response)
                 match = true
                 break
           
           if !match
-            @client.sendMessage(msg.from.id, "'" + message + "' is not a valid command", msg.message_id)
-            type = "base"
-          
-          logRequest(type, "Request '" + message + "' received from " + name)
+            response.addContent(new ContentFactory("text", "'" + request + "' is not a valid request"))
+            client.sendMessage(response)
+            return
           return
         else # Vader face you must
-          @client.sendMessage(sender.getId(), "Please provide the passcode first and reissue your request after", msg.message_id)
+          response.addContent(new ContentFactory("text", "Please provide the passcode first and reissue your request after"))
+          client.sendMessage(response)
+          return
       )
-
-    messageChunks: (msg) ->
-      return msg.match(/[\s\S]{1,2048}/g)
-    
-    logRequest = (type, msg) ->
-      switch type
-        when "base" then env.logger.debug msg
-        when "restricted" then env.logger.error msg
-        when "auth_error" then env.logger.error msg
-        else env.logger.info msg
-        
-    senderName = (from) =>
-      sender = null
-      if from.first_name?
-        sender = from.first_name
-      else
-        sender = from.username
-        return sender
-      if from.last_name?
-        sender += " " + from.last_name
-      return sender
-    
+      
     createDummyParseContext = ->
       variables = {}
       functions = {}
       return M.createParseContext(variables, functions)
       
-    addCommand: (cmd) =>
+    addRequest: (req) =>
       obj = {
-        command: cmd.getCommand()
-        action: (msg) => cmd.emit('change', 'event')
+        request: req.getCommand()
+        action: (msg) => req.emit('change', 'event')
         protected: true
         type: "rule"
-        response: (msg) => return "Rule condition '" + obj.command + "' triggered"
+        response: (msg) => return "Rule condition '" + obj.request + "' triggered"
       }
-      @commands.push obj
-      env.logger.debug "added command ", obj.command
+      @requests.push obj
+      env.logger.info "Listener enabled ruleset command: '", obj.request, "'"
           
-    changeCommand: (id, command) =>
+    changeRequest: (req) =>
+      @removeRequest(req)
+      @addRequest(req)
       
-    removeCommand: (cmd) =>
-      @commands.splice(@commands.indexOf(cmd),1)
+    removeRequest: (req) =>
+      i = -1 # additional iterator needed as array.indexOf(elem) does not work on array of objects
+      for obj in @requests
+        i++
+        if obj.request is req.getCommand()
+          @requests.splice(i)
+          break
+      env.logger.info "Listener disabled ruleset command: '", req.getCommand(), "' "
       
     stop: (@client) =>
       @client.disconnect()
-  
+    
   class BotClient
     
     constructor: (options) ->
-      @base = commons.base @, "TelegramActionHandler"
+      @base = commons.base @, "BotClient"
       @client = new TelegramBotClient(options)
     
     stopListener: (listener) =>
@@ -410,14 +422,16 @@ module.exports = (env) ->
     startListener: (listener) =>
       listener.start(@client)
     
-    sendMessage: (message) =>
+    sendMessage: (message, log) =>
       return new Promise( (resolve, reject) =>
-        message.send(@client).then( (results) =>
+        message.send(@client, log).then( (results) =>
           Promise.some(results, results.length).then( (result) =>
             resolve
           ).catch(Promise.AggregateError, (err) =>
-            @base.error "Message was NOT sent to all recipients"
+            @base.rejectWithErrorString Promise.reject, "Message was NOT sent to all recipients"
           )
+        ).catch( (err) =>
+          @base.error err
         )
       )
         
@@ -426,14 +440,24 @@ module.exports = (env) ->
     constructor: (options) ->
       @recipients = []
       @content = null
+      @client = null
+      @base = commons.base @, "Message"
+      
     
-    processResult: (method, message, recipient) =>
-        method.then ((response) =>
-          env.logger.info __("Telegram \"%s\" to %s successfully sent", message, recipient)
-          return Promise.resolve "success"
-        ), (err) =>
-          env.logger.error __("Sending Telegram \"%s\" to %s failed, reason: %s", message, recipient, err.description)
+    processResult: (method, message, recipient, log  = false) =>
+        method.then( (response) =>
+          log_msg = __("[Message] Sending Telegram \"%s\" to %s: success", message, recipient)
+          if !log
+            env.logger.debug log_msg
+          else
+            env.logger.info log_msg
+          return Promise.resolve
+        ).catch( (err) =>
+          env.logger.info err
+          env.logger.error __("[Message] Sending Telegram \"%s\" to %s: failed; reason: %s", message, recipient, err.description)
           return Promise.reject err
+          
+        )
     
     addRecipient: (recipient) =>
       @recipients.push recipient
@@ -442,55 +466,77 @@ module.exports = (env) ->
       @content = content
       
   class TextMessage extends Message
-   
-    send: (@client) =>
+    constructor: (options) ->
+      super(options)
+      @base = commons.base @, "TextMessage"
+      
+    send: (@client, log) =>
       @content.get().then( (message) =>
-        return @recipients.map( (r) => @processResult(@client.sendMessage(r.getId(), message), message, r.getName()))
+        @recipients.map( (r) =>
+          Promise.all(@sendMessageParts(message, r, log)).then( (result) =>
+            return Promise.resolve
+          ).catch( (err) =>
+            return Promise.reject err
+          )
+        )   
+      ).catch( (err) =>
+        @base.rejectWithErrorString Promise.reject, "Unable to get content"
       )
+    
+    sendMessageParts: (message, recipient, log) =>
+      parts = message.match(/[\s\S]{1,2048}/g)
+      return parts.map( (part) => @processResult(@client.sendMessage(recipient.getId(), part), part, recipient.getName(), log) )
       
   class VideoMessage extends Message
-  
-    send: (@client) =>
+    constructor: (options) ->
+      super(options)
+      @base = commons.base @, "VideoMessage"
+      
+    send: (@client, log) =>
       @content.get().then( (file) =>
-        if fs.existsSync(file)
-          return @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), file), file, r.getName()))
-        else
-          @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
+        return @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), file), file, r.getName(), log))
+      ).catch( (err) =>
+        @base.rejectWithErrorString Promise.reject, "Unable to send Video media"
       )
       
   class AudioMessage extends Message
-    
-    send: (@client) =>
-      @content.get().then( (file) =>
-        if fs.existsSync(file)
-          return @recipients.map( (r) => @processResult(@client.sendAudio(r.getId(), file), file, r.getName()))
-        else
-          @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
-      )
+    constructor: (options) ->
+      super(options)
+      @base = commons.base @, "AudioMessage"
+      
+    send: (@client, log) =>
+      @content.get()
+        .then( (file) =>
+          return @recipients.map( (r) => @processResult(@client.sendAudio(r.getId(), file), file, r.getName(), log))
+        ).catch((err) =>
+          @base.rejectWithErrorString Promise.reject, "Unable to send Audio media"
+        )
       
   class PhotoMessage extends Message
-    
-    send: (@client) =>
-      @content.get().then( (file) =>
-        if fs.existsSync(file)
-          return @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), file), r.getName()))
-        else
-          @base.rejectWithErrorString Promise.reject, __("Cannot send media via telegram - File: \"%s\" does not exist", file)
-      )
+    constructor: (options) ->
+      super(options)
+      @base = commons.base @, "PhotoMessage"
       
-  class MessageFactory
-    types = {
-      text: TextMessage
-      video: VideoMessage
-      audio: AudioMessage
-      photo: PhotoMessage
-    }
-    
-    @getTypes: -> return Object.keys(types)
-    
-    constructor: (type, args) ->
-      return new types[type] args
+    send: (@client, log) =>
+      @content.get()
+        .then( (file) =>
+            return @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), file), r.getName(), log))
+        ).catch( (err) =>
+            @base.rejectWithErrorString Promise.reject, "Unable to send Image media"
+        )
   
+  class LocationMessage extends Message
+    constructor: (options) ->
+      super(options)
+      @base = commons.base @, "LocationMessage"
+      
+    send: (@client) =>
+      @content.get().then( (gps) =>
+        return @recipients.map( (r) => @processResult(@client.sendLocation(r.getId(), [gps[0], gps[1]]), gps, r.getName()))
+      ).catch( (err) =>
+          @base.rejectWithErrorString Promise.reject, "Unable to send Location coordinates"
+      )
+            
   class Recipient
     
     constructor: (recipient) ->
@@ -523,50 +569,89 @@ module.exports = (env) ->
       
     setAuthenticated: (val) =>
       @authenticated = val
-    
-  class RecipientCollection
-    constructor: (load = false) ->
-      @collection = []
-      if load
-        @getAll()
-    
-    add: (recipient) =>
-        @collection.push recipient
-    
-    getAll: () ->
-      config = TelegramPlugin.getConfig()
-      env.logger.debug config
-      @add(new Recipient(r)) for r in config.recipients
-    
-    getByName: (name) =>
-      for r in @collection
-        do (r) =>
-          return r if r.name is name
-      return false
-    
-    getById: (id) =>
-      for r in @collection
-        do (r) =>
-          return r if r.userChatId is id
-      return false
-    
+        
   class Content
     
-    constructor: (@input) ->
-      @base = commons.base @, "TelegramActionHandler"
-        
-    get: () =>
-      return new Promise((resolve, reject) =>
-        TelegramPlugin.evaluateStringExpression(@input).then( (content) =>
-          resolve content
-        ).catch( (error) =>
-          reject error
-        )
-      ).catch((error) =>
-        @base.rejectWithErrorString Promise.reject, error
-      )
-    
+    constructor: (input) ->
+      @input = input
+      @base = commons.base @, "Content"
+   
     set: (@input) ->
+    
+    get: () =>
+      if typeof @input is "string"
+        Promise.resolve @input
+      else
+        @base.rejectWithErrorString Promise.reject, __("\"%s\" is not a string", @input)
+
+  class TextContent extends Content
+    constructor: (input) ->
+      super(input)
+      @base = commons.base @, "TextContent"
+      
+    get: () ->
+      super()
+      
+  class MediaContent extends Content
+    constructor: (input) ->
+      super(input)
+      @base = commons.base @, "MediaContent"
+      
+    get: () ->
+      super()
+        .then( (file) =>
+          if !fs.existsSync(file)
+            @base.rejectWithErrorString Promise.reject, __("File: \"%s\" does not exist", file)
+          else
+            Promise.resolve file
+        ).catch( (err) =>
+          @base.rejectWithErrorString Promise.reject, err
+        )
+  
+  class LocationContent extends Content
+    constructor: (input) ->
+      super(input)
+      @base = commons.base @, "LocationContent"
+      
+    get: () ->
+      super()
+        .then( (gps) =>
+          coord = gps.split(';')
+          if (!isNaN(coord[0]) && coord[0].toString().indexOf('.') isnt -1) and (!isNaN(coord[1]) && coord[1].toString().indexOf('.') isnt -1)
+            Promise.resolve coord
+          else
+            @base.rejectWithErrorString Promise.reject, __("'%s' and '%s' are not valid GPS coordinates", coord[0], coord[1])
+        ).catch( (err) =>
+          @base.rejectWithErrorString Promise.reject, err
+        )
+   
+  class MessageFactory
+    types = {
+      text: TextMessage
+      video: VideoMessage
+      audio: AudioMessage
+      photo: PhotoMessage
+      gps: LocationMessage
+    }
+    
+    @getTypes: -> return Object.keys(types)
+    
+    constructor: (type, args) ->
+      return new types[type] args
+      
+  class ContentFactory
+    types = {
+      text: TextContent
+      video: MediaContent
+      audio: MediaContent
+      photo: MediaContent
+      gps: LocationContent
+    }
+    
+    @getTypes: -> return Object.keys(types)
+    
+    constructor: (type, args) ->
+      return new types[type] args
       
   module.exports.TelegramActionHandler = TelegramActionHandler
   TelegramPlugin = new Telegram()
