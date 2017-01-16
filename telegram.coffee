@@ -393,15 +393,21 @@ module.exports = (env) ->
         response: (msg) => return "Rule condition '" + obj.request + "' triggered"
       }
       @requests.push obj
-      env.logger.info "Telegram listener enabled ruleset trigger: '", obj.request, "'"
+      env.logger.info "After add: ", @requests
+      env.logger.info "Telegram listener enabled ruleset command: '", obj.request, "'"
           
     changeRequest: (req) =>
       @removeRequest(req)
       @addRequest(req)
       
     removeRequest: (req) =>
-      @requests.splice(@requests.indexOf(req),1)
-      env.logger.info "Telegram listener disabled ruleset trigger: '", req.getCommand(), "' "
+      i = -1 # additional iterator needed as array.indexOf(elem) does not work on array of objects
+      for obj in @requests
+        i++
+        if obj.request is req.getCommand()
+          @requests.splice(i)
+          break
+      env.logger.info "Telegram listener disabled ruleset command: '", req.getCommand(), "' "
       
     stop: (@client) =>
       @client.disconnect()
