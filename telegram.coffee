@@ -447,14 +447,15 @@ module.exports = (env) ->
     
     processResult: (method, message, recipient, log  = false) =>
         method.then( (response) =>
-          log_msg = __("Sending Telegram \"%s\" to %s: success", message, recipient)
+          log_msg = __("[Message] Sending Telegram \"%s\" to %s: success", message, recipient)
           if !log
             env.logger.debug log_msg
           else
             env.logger.info log_msg
           return Promise.resolve
         ).catch( (err) =>
-          @base.rejectWithErrorString Promise.reject, __("Sending Telegram \"%s\" to %s: failed; reason: %s", message, recipient, err.description)
+          env.logger.error __("[Message] Sending Telegram \"%s\" to %s: failed; reason: %s", message, recipient, err.description)
+          return Promise.reject err
           
         )
     
