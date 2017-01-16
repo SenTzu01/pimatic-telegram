@@ -168,7 +168,6 @@ module.exports = (env) ->
         )
       @m1.matchStringWithVars( (@m1, expr) =>
         @framework.variableManager.evaluateStringExpression(expr).then( (content) =>
-          #message.addContent(new Content(content))
           message.addContent(new ContentFactory(type, content))
         )
         match = @m1.getFullMatch()
@@ -391,17 +390,18 @@ module.exports = (env) ->
         action: (msg) => req.emit('change', 'event')
         protected: true
         type: "rule"
-        response: (msg) => 
-          return "Rule condition '" + obj.request + "' triggered"
+        response: (msg) => return "Rule condition '" + obj.request + "' triggered"
       }
       @requests.push obj
       env.logger.info "Telegram listener enabled ruleset trigger: '", obj.request, "'"
           
-    changeRequest: (id, request) =>
+    changeRequest: (req) =>
+      @removeRequest(req)
+      @addRequest(req)
       
     removeRequest: (req) =>
-      @commands.splice(@requests.indexOf(req),1)
-      env.logger.info "Telegram listener disabled ruleset trigger: '", obj.request, "' "
+      @requests.splice(@requests.indexOf(req),1)
+      env.logger.info "Telegram listener disabled ruleset trigger: '", req.getCommand(), "' "
       
     stop: (@client) =>
       @client.disconnect()
@@ -409,7 +409,7 @@ module.exports = (env) ->
   class BotClient
     
     constructor: (options) ->
-      @base = commons.base @, "TelegramBotClient"
+      @base = commons.base @, "BotClient"
       @client = new TelegramBotClient(options)
     
     stopListener: (listener) =>
@@ -420,11 +420,11 @@ module.exports = (env) ->
     
     sendMessage: (message, log) =>
       return new Promise( (resolve, reject) =>
-        message.send(@client).then( (results) =>
+        message.send(@client, log).then( (results) =>
           Promise.some(results, results.length).then( (result) =>
             resolve
           ).catch(Promise.AggregateError, (err) =>
-            @base.error "Message was NOT sent to all recipients"
+            @base.rejectWithErrorString Promise.reject, "Message was NOT sent to all recipients"
           )
         ).catch( (err) =>
           @base.error err
@@ -436,79 +436,99 @@ module.exports = (env) ->
     constructor: (options) ->
       @recipients = []
       @content = null
+      @client = null
+      @base = commons.base @, "Message"
+      
     
     processResult: (method, message, recipient, log  = false) =>
-        method.then ((response) =>
+        method.then( (response) =>
           log_msg = __("Sending Telegram \"%s\" to %s: success", message, recipient)
           if !log
             env.logger.debug log_msg
           else
             env.logger.info log_msg
-          return Promise.resolve "success"
-        ), (err) =>
-          env.logger.error __("Sending Telegram \"%s\" to %s: failed; reason: %s", message, recipient, err.description)
-          return Promise.reject err
+          return Promise.resolve
+        ).catch( (err) =>
+          @base.rejectWithErrorString Promise.reject, __("Sending Telegram \"%s\" to %s: failed; reason: %s", message, recipient, err.description)
+          
+        )
     
     addRecipient: (recipient) =>
       @recipients.push recipient
     
     addContent: (content) =>
       @content = content
-    
-    messageParts: (msg) =>
-      return msg.match(/[\s\S]{1,2048}/g)
       
   class TextMessage extends Message
-   
+    constructor: (options) ->
+      super(options)
+      @base = commons.base @, "TextMessage"
+      
     send: (@client, log) =>
-      @content.get()
-        .then( (message) =>
-          return @recipients.map( (r) =>
-            @messageParts(message).map( (part) => 
-              @processResult(@client.sendMessage(r.getId(), part), part, r.getName(), log)
-            )
-          )   
-        ).catch( (err) =>
-          Promise.reject "Cannot send text message via Telegram"
-        )
-        
+      @content.get().then( (message) =>
+        @recipients.map( (r) =>
+          Promise.all(@sendMessageParts(message, r, log)).then( (result) =>
+            return Promise.resolve
+          ).catch( (err) =>
+            return Promise.reject err
+          )
+        )   
+      ).catch( (err) =>
+        @base.rejectWithErrorString Promise.reject, "Unable to get content"
+      )
+    
+    sendMessageParts: (message, recipient, log) =>
+      parts = message.match(/[\s\S]{1,2048}/g)
+      return parts.map( (part) => @processResult(@client.sendMessage(recipient.getId(), part), part, recipient.getName(), log) )
+      
   class VideoMessage extends Message
-  
+    constructor: (options) ->
+      super(options)
+      @base = commons.base @, "VideoMessage"
+      
     send: (@client, log) =>
-      @content.get()
-        .then( (file) =>
-          return @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), file), file, r.getName(), log))
-        ).catch( (err) =>
-          Promise.reject "Cannot send media via Telegram"
-        )
+      @content.get().then( (file) =>
+        return @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), file), file, r.getName(), log))
+      ).catch( (err) =>
+        @base.rejectWithErrorString Promise.reject, "Unable to send Video media"
+      )
       
   class AudioMessage extends Message
-    
+    constructor: (options) ->
+      super(options)
+      @base = commons.base @, "AudioMessage"
+      
     send: (@client, log) =>
       @content.get()
         .then( (file) =>
           return @recipients.map( (r) => @processResult(@client.sendAudio(r.getId(), file), file, r.getName(), log))
         ).catch((err) =>
-          Promise.reject "Cannot send media via Telegram"
+          @base.rejectWithErrorString Promise.reject, "Unable to send Audio media"
         )
       
   class PhotoMessage extends Message
-    
+    constructor: (options) ->
+      super(options)
+      @base = commons.base @, "PhotoMessage"
+      
     send: (@client, log) =>
       @content.get()
         .then( (file) =>
             return @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), file), r.getName(), log))
         ).catch( (err) =>
-            Promise.reject "Cannot send media via Telegram"
+            @base.rejectWithErrorString Promise.reject, "Unable to send Image media"
         )
   
-   class LocationMessage extends Message
-    
+  class LocationMessage extends Message
+    constructor: (options) ->
+      super(options)
+      @base = commons.base @, "LocationMessage"
+      
     send: (@client) =>
       @content.get().then( (gps) =>
         return @recipients.map( (r) => @processResult(@client.sendLocation(r.getId(), [gps[0], gps[1]]), gps, r.getName()))
       ).catch( (err) =>
-          Promise.reject "Cannot send coordinates via telegram"
+          @base.rejectWithErrorString Promise.reject, "Unable to send Location coordinates"
       )
             
   class Recipient
@@ -548,7 +568,7 @@ module.exports = (env) ->
     
     constructor: (input) ->
       @input = input
-      @base = commons.base @, "TelegramContent"
+      @base = commons.base @, "Content"
    
     set: (@input) ->
     
@@ -556,12 +576,12 @@ module.exports = (env) ->
       if typeof @input is "string"
         Promise.resolve @input
       else
-        Promise.reject __("\"%s\" is not a string", @input)
+        @base.rejectWithErrorString Promise.reject, __("\"%s\" is not a string", @input)
 
   class TextContent extends Content
     constructor: (input) ->
       super(input)
-      @base = commons.base @, "TelegramTextContent"
+      @base = commons.base @, "TextContent"
       
     get: () ->
       super()
@@ -569,26 +589,23 @@ module.exports = (env) ->
   class MediaContent extends Content
     constructor: (input) ->
       super(input)
-      @base = commons.base @, "TelegramMediaContent"
+      @base = commons.base @, "MediaContent"
       
     get: () ->
       super()
         .then( (file) =>
           if !fs.existsSync(file)
-            err = __("File: \"%s\" does not exist", file)
-            @base.error err
-            Promise.reject err
+            @base.rejectWithErrorString Promise.reject, __("File: \"%s\" does not exist", file)
           else
             Promise.resolve file
         ).catch( (err) =>
-          @base.error err
-          Promise.reject err
+          @base.rejectWithErrorString Promise.reject, "Unable to get Media file"
         )
   
   class LocationContent extends Content
     constructor: (input) ->
       super(input)
-      @base = commons.base @, "TelegramLocationContent"
+      @base = commons.base @, "LocationContent"
       
     get: () ->
       super()
@@ -597,10 +614,9 @@ module.exports = (env) ->
           if (!isNaN(coord[0]) && coord[0].toString().indexOf('.') isnt -1) and (!isNaN(coord[1]) && coord[1].toString().indexOf('.') isnt -1)
             Promise.resolve coord
           else
-            Promise.reject __("'%s' and '%s' are not valid GPS coordinates", coord[0], coord[1])
+            @base.rejectWithErrorString Promise.reject, __("'%s' and '%s' are not valid GPS coordinates", coord[0], coord[1])
         ).catch( (err) =>
-          @base.error err
-          Promise.reject err
+          @base.rejectWithErrorString Promise.reject, "Unable to get GPS coordinates"
         )
    
   class MessageFactory
