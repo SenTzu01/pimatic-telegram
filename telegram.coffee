@@ -403,7 +403,7 @@ module.exports = (env) ->
       for obj in @requests
         i++
         if obj.request is req.getCommand()
-          @requests.splice(i)
+          @requests.splice(i,1)
           break
       env.logger.info "Listener disabled ruleset command: '", req.getCommand(), "' "
       
