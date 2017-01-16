@@ -392,7 +392,7 @@ module.exports = (env) ->
         response: (msg) => return "Rule condition '" + obj.request + "' triggered"
       }
       @requests.push obj
-      env.logger.info "Telegram listener enabled ruleset command: '", obj.request, "'"
+      env.logger.info "Listener enabled ruleset command: '", obj.request, "'"
           
     changeRequest: (req) =>
       @removeRequest(req)
@@ -405,7 +405,7 @@ module.exports = (env) ->
         if obj.request is req.getCommand()
           @requests.splice(i)
           break
-      env.logger.info "Telegram listener disabled ruleset command: '", req.getCommand(), "' "
+      env.logger.info "Listener disabled ruleset command: '", req.getCommand(), "' "
       
     stop: (@client) =>
       @client.disconnect()
