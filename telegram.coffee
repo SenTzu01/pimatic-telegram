@@ -260,7 +260,7 @@ module.exports = (env) ->
         {
           request: "execute", 
           action: => 
-            env.logger.warn "auth_error", "request 'execute' received; This is not allowed for security reasons" # It's a trap !!
+            env.logger.warn "'execute' request received; This is not allowed for security reasons" # It's a trap !!
             return null
           protected: false
           response: (msg) ->
@@ -335,7 +335,6 @@ module.exports = (env) ->
           env.logger.info sender.getName() + " successfully authenticated"
           return
         
-        env.logger.debug @authenticated
         for auth in @authenticated
           if auth.id is sender.getId()
             if auth.time < (date.getTime()-(TelegramPlugin.getDeviceById(@id).config.auth_timeout*60000)) # You were carbon frozen for too long, Solo! Solo! Too Nakma Noya Solo!
@@ -454,6 +453,7 @@ module.exports = (env) ->
             env.logger.info log_msg
           return Promise.resolve
         ).catch( (err) =>
+          env.logger.info err
           env.logger.error __("[Message] Sending Telegram \"%s\" to %s: failed; reason: %s", message, recipient, err.description)
           return Promise.reject err
           
@@ -605,7 +605,7 @@ module.exports = (env) ->
           else
             Promise.resolve file
         ).catch( (err) =>
-          @base.rejectWithErrorString Promise.reject, "Unable to get Media file"
+          @base.rejectWithErrorString Promise.reject, err
         )
   
   class LocationContent extends Content
@@ -622,7 +622,7 @@ module.exports = (env) ->
           else
             @base.rejectWithErrorString Promise.reject, __("'%s' and '%s' are not valid GPS coordinates", coord[0], coord[1])
         ).catch( (err) =>
-          @base.rejectWithErrorString Promise.reject, "Unable to get GPS coordinates"
+          @base.rejectWithErrorString Promise.reject, err
         )
    
   class MessageFactory
