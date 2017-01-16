@@ -393,7 +393,6 @@ module.exports = (env) ->
         response: (msg) => return "Rule condition '" + obj.request + "' triggered"
       }
       @requests.push obj
-      env.logger.info "After add: ", @requests
       env.logger.info "Telegram listener enabled ruleset command: '", obj.request, "'"
           
     changeRequest: (req) =>
