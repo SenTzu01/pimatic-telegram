@@ -37,7 +37,8 @@ module.exports = (env) ->
             @framework.pluginManager.updatePluginConfig(@config.plugin, @config)
       }
       oldChatId.migrate()
-      
+    
+    
     init: (app, @framework, @config) =>
       
       @migrateMainChatId(@framework, @config)
@@ -51,6 +52,14 @@ module.exports = (env) ->
         configDef: deviceConfigDef.TelegramReceiverDevice, 
         createCallback: (config, lastState) => new TelegramReceiverDevice(config, lastState, @framework)
       })
+      
+      @framework.on('deviceChanged', (device) => # re-add predicate actions to listener on TelegramReceiverDevice config changes
+        if device instanceof TelegramReceiverDevice
+          for rule in @framework.ruleManager.getRules()
+            for predicate in rule.predicates
+              if predicate.handler instanceof TelegramPredicateHandler
+                  @registerCmd(predicate.handler)
+      )
       
     evaluateStringExpression: (value) ->
       return @framework.variableManager.evaluateStringExpression(value)
@@ -84,6 +93,9 @@ module.exports = (env) ->
     
     getActionProviders: () =>
       return @framework.ruleManager.actionProviders
+        
+    getFramework: () =>
+      return @framework
       
     registerCmd: (@cmd) =>
       @emit "cmdRegistered", @cmd
@@ -167,12 +179,9 @@ module.exports = (env) ->
             i += 1
         )
       @m1.matchStringWithVars( (@m1, expr) =>
-        @framework.variableManager.evaluateStringExpression(expr).then( (content) =>
-          message.addContent(new ContentFactory(type, content))
-        )
+        message.addContent(new ContentFactory(type, expr))
         match = @m1.getFullMatch()
       )
-      
       
       if match?
         if message.recipients.length < 1
@@ -203,7 +212,7 @@ module.exports = (env) ->
     constructor: (@config, lastState, @framework) ->
       @id = @config.id
       @name = @config.name
-      super()
+      @listener = new Listener(@id)
       
       @client = new BotClient({
         token: TelegramPlugin.getToken()
@@ -215,19 +224,19 @@ module.exports = (env) ->
         }
       })
       
-      @listener = new Listener(@id)
       @client.startListener(@listener)
       
-      
       TelegramPlugin.on('cmdRegistered', (cmd) =>
-        @listener.addRequest(cmd)
+        @listener.requestAdd(cmd)
       )
       TelegramPlugin.on('cmdDeregistered', (cmd) =>
-        @listener.removeRequest(cmd)
+        @listener.requestDelete(cmd)
       )
       
+      super()
+    
     destroy: ->
-      @client.stopListener(@listener) 
+      @client.stopListener(@listener)
       super()
   
   class Listener
@@ -237,7 +246,6 @@ module.exports = (env) ->
       @client = null
       @authenticated = []
       @requests = []
-      
       @requests = [{
           request: "help"
           type: "base"
@@ -295,6 +303,8 @@ module.exports = (env) ->
                 return text
             return "device not found"
         }]
+      
+      
       
     start: (@client) =>
       @client.connect()
@@ -382,23 +392,24 @@ module.exports = (env) ->
       variables = {}
       functions = {}
       return M.createParseContext(variables, functions)
-      
-    addRequest: (req) =>
-      obj = {
-        request: req.getCommand()
-        action: (msg) => req.emit('change', 'event')
-        protected: true
-        type: "rule"
-        response: (msg) => return "Rule condition '" + obj.request + "' triggered"
-      }
-      @requests.push obj
-      env.logger.info "Listener enabled ruleset command: '", obj.request, "'"
+    
+    requestAdd: (req) =>
+      if !@requestIsRegistered(req)
+        obj = {
+          request: req.getCommand()
+          action: (msg) => req.emit('change', 'event')
+          protected: true
+          type: "rule"
+          response: (msg) => return "Rule condition '" + obj.request + "' triggered"
+        }
+        @requests.push obj
+        env.logger.info "Listener enabled ruleset command: '", obj.request, "'"
           
-    changeRequest: (req) =>
-      @removeRequest(req)
-      @addRequest(req)
+    requestChange: (req) =>
+      @requestDelete(req)
+      @requestAdd(req)
       
-    removeRequest: (req) =>
+    requestDelete: (req) =>
       i = -1 # additional iterator needed as array.indexOf(elem) does not work on array of objects
       for obj in @requests
         i++
@@ -407,6 +418,14 @@ module.exports = (env) ->
           break
       env.logger.info "Listener disabled ruleset command: '", req.getCommand(), "' "
       
+    requestIsRegistered: (req) =>
+      reistered = false
+      for obj in @requests
+        if obj.request is req.getCommand()
+          registered = true
+          break
+      return registered
+    
     stop: (@client) =>
       @client.disconnect()
     
@@ -573,17 +592,20 @@ module.exports = (env) ->
   class Content
     
     constructor: (input) ->
+      if typeof input is "string" or typeof input is "number"
+        input = ['"' + input + '"']
       @input = input
       @base = commons.base @, "Content"
    
     set: (@input) ->
     
-    get: () =>
-      if typeof @input is "string"
-        Promise.resolve @input
-      else
-        @base.rejectWithErrorString Promise.reject, __("\"%s\" is not a string", @input)
-
+    get: () =>      
+      TelegramPlugin.evaluateStringExpression(@input).then( (content) =>
+        return Promise.resolve content
+      ).catch( (err) =>
+        @base.rejectWithErrorString Promise.reject, __("Could not parse \"%s\"", @input)
+      )
+      
   class TextContent extends Content
     constructor: (input) ->
       super(input)
