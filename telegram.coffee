@@ -242,7 +242,6 @@ module.exports = (env) ->
   class Listener
   
     constructor: (id) ->
-      env.logger.info "Listener constructor called"
       @id = id
       @client = null
       @authenticated = []
