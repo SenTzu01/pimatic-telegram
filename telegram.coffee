@@ -207,12 +207,38 @@ module.exports = (env) ->
         client = new BotClient({token: TelegramPlugin.getToken()})
         client.sendMessage(@message, true)
   
-  class TelegramReceiverDevice extends env.devices.Device
-    
+  class TelegramReceiverDevice extends env.devices.SwitchActuator
+        
     constructor: (@config, lastState, @framework) ->
       @id = @config.id
       @name = @config.name
+      @_state = lastState?.state?.value or off
+      
+      super()
+      
       @listener = new Listener(@id)
+      TelegramPlugin.on('cmdRegistered', (cmd) =>
+        @listener.requestAdd(cmd)
+      )
+      TelegramPlugin.on('cmdDeregistered', (cmd) =>
+        @listener.requestDelete(cmd)
+      )
+      
+      @startListener() if @_state
+          
+    changeStateTo: (state) ->
+      pending = []
+      if @_state is state then return Promise.resolve true
+      if state
+        pending.push @startListener()
+      else
+        pending.push @stopListener()
+        
+      Promise.all(pending).then( =>
+        @_setState(state)
+      )
+      
+    startListener: () =>
       
       @client = new BotClient({
         token: TelegramPlugin.getToken()
@@ -225,18 +251,12 @@ module.exports = (env) ->
       })
       
       @client.startListener(@listener)
-      
-      TelegramPlugin.on('cmdRegistered', (cmd) =>
-        @listener.requestAdd(cmd)
-      )
-      TelegramPlugin.on('cmdDeregistered', (cmd) =>
-        @listener.requestDelete(cmd)
-      )
-      
-      super()
-    
-    destroy: ->
+     
+    stopListener: () =>
       @client.stopListener(@listener)
+      
+    destroy: ->
+      @stopListener()
       super()
   
   class Listener
@@ -245,7 +265,6 @@ module.exports = (env) ->
       @id = id
       @client = null
       @authenticated = []
-      @requests = []
       @requests = [{
           request: "help"
           type: "base"
@@ -307,12 +326,16 @@ module.exports = (env) ->
       
       
     start: (@client) =>
+      env.logger.info "Starting Telegram listener"
       @client.connect()
       @enableRequests()
+    
+    stop: (@client) =>
+      env.logger.info "Stopping Telegram listener"
+      @authenticated = []
+      @client.disconnect()
       
     enableRequests: () =>
-      env.logger.info "Starting Telegram listener"
-      
       @client.on('/*', (msg) =>
         env.logger.debug "Bot command received: ", msg
         client = new BotClient({token: TelegramPlugin.getToken()})
@@ -425,9 +448,6 @@ module.exports = (env) ->
           registered = true
           break
       return registered
-    
-    stop: (@client) =>
-      @client.disconnect()
     
   class BotClient
     
