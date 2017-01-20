@@ -212,7 +212,7 @@ module.exports = (env) ->
     constructor: (@config, lastState, @framework) ->
       @id = @config.id
       @name = @config.name
-      @_state = lastState?.state?.value or on
+      @_state = lastState?.state?.value or off
       
       super()
       
