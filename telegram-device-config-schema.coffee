@@ -12,6 +12,10 @@ module.exports = {
         description: "Time after which passcode needs to be re-entered (in minutes)"
         type: "number"
         default: 5
+      default_state:
+        description: "Start Telegram Listener at Pimatic start?"
+        type: "boolean"
+        default: true
       interval:
         description: "How often to check for new requests (in ms)"
         type: "number"

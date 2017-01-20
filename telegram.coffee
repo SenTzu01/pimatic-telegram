@@ -53,14 +53,21 @@ module.exports = (env) ->
         createCallback: (config, lastState) => new TelegramReceiverDevice(config, lastState, @framework)
       })
       
+      
+      @framework.on('deviceAdded', (device) =>
+        @reparsePredicates(device)
+      )
       @framework.on('deviceChanged', (device) => # re-add predicate actions to listener on TelegramReceiverDevice config changes
-        if device instanceof TelegramReceiverDevice
+        @reparsePredicates(device)
+      )
+    
+    reparsePredicates: (device) =>
+      if device instanceof TelegramReceiverDevice
           for rule in @framework.ruleManager.getRules()
             for predicate in rule.predicates
               if predicate.handler instanceof TelegramPredicateHandler
                   @registerCmd(predicate.handler)
-      )
-      
+    
     evaluateStringExpression: (value) ->
       return @framework.variableManager.evaluateStringExpression(value)
     
@@ -212,7 +219,7 @@ module.exports = (env) ->
     constructor: (@config, lastState, @framework) ->
       @id = @config.id
       @name = @config.name
-      @_state = lastState?.state?.value or off
+      @_state = lastState?.state?.value or @config.default_state
       
       super()
       
@@ -256,6 +263,8 @@ module.exports = (env) ->
       @client.stopListener(@listener)
       
     destroy: ->
+      TelegramPlugin.removeAllListeners('cmdRegistered')
+      TelegramPlugin.removeAllListeners('cmdDeregistered')
       @stopListener()
       super()
   
