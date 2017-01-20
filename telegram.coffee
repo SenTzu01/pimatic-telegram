@@ -219,7 +219,7 @@ module.exports = (env) ->
     constructor: (@config, lastState, @framework) ->
       @id = @config.id
       @name = @config.name
-      @_state = lastState?.state?.value or @config.default_state
+      @_state = lastState?.state?.value or @config.stateStartup
       
       super()
       
@@ -271,7 +271,7 @@ module.exports = (env) ->
   class Listener
   
     constructor: (id) ->
-      @id = id
+      @id  = id
       @client = null
       @authenticated = []
       @requests = [{
@@ -358,6 +358,7 @@ module.exports = (env) ->
       @client.on('text', (msg) =>
         return if msg.text.charAt(0) is '/'
         env.logger.debug "Request '", msg.text, "' received, processing..."
+        instance = TelegramPlugin.getDeviceById(@id)
         sender = TelegramPlugin.getSender(msg.from.id.toString())
         
         # auth logic
@@ -370,16 +371,16 @@ module.exports = (env) ->
         response = new MessageFactory("text")
         response.addRecipient(sender)
         
-        if TelegramPlugin.getDeviceById(@id).config.secret is msg.text # Face Vader you must!
+        if instance.config.secret is msg.text # Face Vader you must!
           @authenticated.push {id: sender.getId(), time: date.getTime()}
-          response.addContent(new ContentFactory("text", "Passcode correct, timeout set to " + TelegramPlugin.getDeviceById(@id).config.auth_timeout + " minutes. You can now issue requests"))
+          response.addContent(new ContentFactory("text", "Passcode correct, timeout set to " + instance.config.auth_timeout + " minutes. You can now issue requests"))
           client.sendMessage(response)
           env.logger.info sender.getName() + " successfully authenticated"
           return
         
         for auth in @authenticated
           if auth.id is sender.getId()
-            if auth.time < (date.getTime()-(TelegramPlugin.getDeviceById(@id).config.auth_timeout*60000)) # You were carbon frozen for too long, Solo! Solo! Too Nakma Noya Solo!
+            if auth.time < (date.getTime()-(instance.config.auth_timeout*60000)) # You were carbon frozen for too long, Solo! Solo! Too Nakma Noya Solo!
               sender.setAuthenticated(false)
             else
               sender.setAuthenticated(true)
@@ -393,8 +394,9 @@ module.exports = (env) ->
           for req in @requests
             if req.request.toLowerCase() is request.slice(0, req.request.length) # test request against base commands and 'receive "command"' predicate in ruleset
               req.action()
-              response.addContent(new ContentFactory("text", req.response(request)))
-              client.sendMessage(response)
+              if req.type is "base" or instance.config.confirmRuleTrigger
+                response.addContent(new ContentFactory("text", req.response(request)))
+                client.sendMessage(response)
               match = true
               break
           
@@ -404,8 +406,9 @@ module.exports = (env) ->
               han = act.parseAction(request, context) # test if request is a valid action, e.g. "turn on switch-room1"
               if han?
                 han.actionHandler.executeAction()
-                response.addContent(new ContentFactory("text", "Request '" + request + "' executed"))
-                client.sendMessage(response)
+                if instance.config.confirmDeviceAction
+                  response.addContent(new ContentFactory("text", "Request '" + request + "' executed"))
+                  client.sendMessage(response)
                 match = true
                 break
           
