@@ -14,9 +14,10 @@ Pimatic plugin to provide bi-directional integration with Telegram, the free mes
 - User-configurable authentication timeout
 - Polling mechanism prevents exposing your Pimatic environment
 - Allowed file formats depend on Telegram supported formats, .mp3 (audio), .mp4, .avi (video), .jpg and .png (photo) have been validated
+- File size limitation with Telegram is 50MB
 
 ### Rule syntax and examples: 
-<b>send < text | video | audio | photo | gps > telegram to [ recipient1 recipient2 ... recipientn ] < "text with $variables"  | "/local/path/with/$variables/to/file" | "$latitude;$longitude" ></b><br/>
+<b>send < text | video | audio | photo | doc | gps > telegram to [ recipient1 recipient2 ... recipientn ] < "text with $variables"  | "/local/path/with/$variables/to/file" | "$latitude;$longitude" ></b><br/>
 and / or:<br/>
 <b>telegram received "user-defined-keyword"</b><br/>
 
