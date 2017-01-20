@@ -2,7 +2,6 @@ module.exports = (env) ->
 
   Promise = env.require 'bluebird'
   fs = require('fs')
-  util = require('util')
   commons = require('pimatic-plugin-commons')(env)
   TelegramBotClient = require('telebot');
   cassert = env.require 'cassert'
@@ -674,7 +673,6 @@ module.exports = (env) ->
           
           stats = fs.statSync(file)
           if stats.isFile()
-            info = util.inspect(stats)
             if stats.size < max_size*MB
               Promise.resolve file
             else
