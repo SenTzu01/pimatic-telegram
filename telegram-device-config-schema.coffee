@@ -12,6 +12,18 @@ module.exports = {
         description: "Time after which passcode needs to be re-entered (in minutes)"
         type: "number"
         default: 5
+      stateStartup:
+        description: "Start Telegram Listener at Pimatic start?"
+        type: "boolean"
+        default: true
+      confirmRuleTrigger:
+        description: "Should the receiver send confirmation upon executing rule actions?"
+        type: "boolean"
+        default: true
+      confirmDeviceAction:
+        description: "Should the receiver send confirmation upon executing device actions?"
+        type: "boolean"
+        default: true
       interval:
         description: "How often to check for new requests (in ms)"
         type: "number"
