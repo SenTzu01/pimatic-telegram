@@ -547,7 +547,7 @@ module.exports = (env) ->
       @content.get().then( (file) =>
         return @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), file), file, r.getName(), log))
       ).catch( (err) =>
-        @base.rejectWithErrorString Promise.reject, "Unable to send Video media"
+        @base.rejectWithErrorString Promise.reject, "Unable to send Video file"
       )
       
   class AudioMessage extends Message
@@ -560,7 +560,7 @@ module.exports = (env) ->
         .then( (file) =>
           return @recipients.map( (r) => @processResult(@client.sendAudio(r.getId(), file), file, r.getName(), log))
         ).catch((err) =>
-          @base.rejectWithErrorString Promise.reject, "Unable to send Audio media"
+          @base.rejectWithErrorString Promise.reject, "Unable to send Audio file"
         )
       
   class PhotoMessage extends Message
@@ -573,7 +573,20 @@ module.exports = (env) ->
         .then( (file) =>
             return @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), file), r.getName(), log))
         ).catch( (err) =>
-            @base.rejectWithErrorString Promise.reject, "Unable to send Image media"
+            @base.rejectWithErrorString Promise.reject, "Unable to send Image file"
+        )
+  
+  class DocumentMessage extends Message
+    constructor: (options) ->
+      super(options)
+      @base = commons.base @, "DocumentMessage"
+      
+    send: (@client, log) =>
+      @content.get()
+        .then( (file) =>
+            return @recipients.map( (r) => @processResult(@client.sendDocument(r.getId(), file), r.getName(), log))
+        ).catch( (err) =>
+            @base.rejectWithErrorString Promise.reject, "Unable to send file"
         )
   
   class LocationMessage extends Message
@@ -649,15 +662,27 @@ module.exports = (env) ->
   class MediaContent extends Content
     constructor: (input) ->
       super(input)
+      
       @base = commons.base @, "MediaContent"
       
     get: () ->
       super()
         .then( (file) =>
-          if !fs.existsSync(file)
-            @base.rejectWithErrorString Promise.reject, __("File: \"%s\" does not exist", file)
+          max_size = 50
+          MB = Math.pow(1024,2)
+          
+          stats = fs.statSync(file)
+          if stats.isFile()
+            if stats.size < max_size*MB
+              Promise.resolve file
+            else
+              @base.rejectWithErrorString Promise.reject, __("filesize of \"%s\" is too large (%s MB). Max. allowed size is %s MB", file, stats.size/MB, max_size)
           else
-            Promise.resolve file
+            if stats.isDirectory()
+              error = __("\"%s\" is a directory", file)
+            else
+              err = __("\"%s\" does not exist or is a *nix device", file)
+            @base.rejectWithErrorString Promise.reject, error
         ).catch( (err) =>
           @base.rejectWithErrorString Promise.reject, err
         )
@@ -686,6 +711,7 @@ module.exports = (env) ->
       audio: AudioMessage
       photo: PhotoMessage
       gps: LocationMessage
+      doc: DocumentMessage
     }
     
     @getTypes: -> return Object.keys(types)
@@ -700,6 +726,7 @@ module.exports = (env) ->
       audio: MediaContent
       photo: MediaContent
       gps: LocationContent
+      doc: MediaContent
     }
     
     @getTypes: -> return Object.keys(types)
