@@ -1,10 +1,7 @@
 module.exports = (env) ->
 
   Promise = env.require 'bluebird'
-  
-  commons = require('pimatic-plugin-commons')(env)
   cassert = env.require 'cassert'
-  events = require 'events'
   M = env.matcher
   Listener = require('./lib/listener')(env)
   BotClient = require('./lib/botclient')(env)
@@ -93,13 +90,13 @@ module.exports = (env) ->
     getConfig: () =>
       return @config
     
-    getDeviceById: (id) =>
+    getDeviceById: (id) ->
       return @framework.deviceManager.getDeviceById(id)
       
     getDeviceClasses: () =>
       return @framework.deviceManager.getDeviceClasses()
     
-    getDevices: () ->
+    getDevices: () =>
       return @framework.deviceManager.getDevices()
     
     getActionProviders: () =>
@@ -224,15 +221,16 @@ module.exports = (env) ->
       @id = @config.id
       @name = @config.name
       @_state = lastState?.state?.value or @config.stateStartup
+      @listener = new Listener(@config, TelegramPlugin)
       
-      super()
-      @listener = new Listener(@id, TelegramPlugin)
       TelegramPlugin.on('cmdRegistered', (cmd) =>
         @listener.requestAdd(cmd)
       )
       TelegramPlugin.on('cmdDeregistered', (cmd) =>
         @listener.requestDelete(cmd)
       )
+      
+      super()
       
       @startListener() if @_state
           

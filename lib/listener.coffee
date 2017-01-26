@@ -6,7 +6,11 @@ module.exports = (env) ->
   
   class Listener
   
-    constructor: (@id, @TelegramPlugin) ->
+    constructor: (@config, @TelegramPlugin) ->
+      @token = @TelegramPlugin.getToken()
+      @devices = @TelegramPlugin.getDevices()
+      @sender = (id) -> @TelegramPlugin.getSender(id)
+      @actions = -> @TelegramPlugin.getActionProviders()
       @client = null
       @authenticated = []
       @requests = [{
@@ -43,10 +47,9 @@ module.exports = (env) ->
           type: "base"
           action: -> return null
           protected: true
-          response: (msg) ->
-            devices = @TelegramPlugin.getDevices()
+          response: (msg) =>
             text = 'Devices :\n'
-            for dev in devices
+            for dev in @devices
               text += '\tName: ' + dev.name + "\tID: " + dev.id + "\n\n"
             return text
         },
@@ -57,8 +60,7 @@ module.exports = (env) ->
           protected: true
           response: (msg) => 
             obj = msg.split("device", 4)
-            devices = @TelegramPlugin.getDevices()
-            for dev in devices
+            for dev in @devices
               if ( obj[1].substring(1) == dev.id.toLowerCase() ) or ( obj[1].substring(1) == dev.name.toLowerCase() )
                 text = 'Name: ' + dev.name + " \tID: " + dev.id + " \tType: " +  dev.constructor.name + "\n"
                 for name of dev.attributes
@@ -66,8 +68,6 @@ module.exports = (env) ->
                 return text
             return "device not found"
         }]
-      
-      
       
     start: (@client) =>
       env.logger.info "Starting Telegram listener"
@@ -80,21 +80,22 @@ module.exports = (env) ->
       @client.disconnect()
       
     enableRequests: () =>
+      
       @client.on('/*', (msg) =>
         env.logger.debug "Bot command received: ", msg
-        client = new BotClient({token: @TelegramPlugin.getToken()})
+        client = new BotClient({token: @token})
         response = new MessageFactory("text")
-        response.addRecipient(@TelegramPlugin.getSender(msg.from.id.toString()))
+        response.addRecipient(@sender(msg.from.id.toString()))
         response.addContent(new ContentFactory("text", 'Bot commands (/<cmd>) are not implemented', @TelegramPlugin))
         client.sendMessage(response)
         return true
       )
       
       @client.on('text', (msg) =>
+
         return if msg.text.charAt(0) is '/'
         env.logger.debug "Request '", msg.text, "' received, processing..."
-        instance = @TelegramPlugin.getDeviceById(@id)
-        sender = @TelegramPlugin.getSender(msg.from.id.toString())
+        sender = @sender(msg.from.id.toString())
         
         # auth logic
         if !sender.isAdmin() # Lord Vader force-chokes you !!
@@ -102,20 +103,20 @@ module.exports = (env) ->
           return
         
         date = new Date()
-        client = new BotClient({token: @TelegramPlugin.getToken()})
+        client = new BotClient({token: @token})
         response = new MessageFactory("text")
         response.addRecipient(sender)
         
-        if instance.config.secret is msg.text # Face Vader you must!
+        if @config.secret is msg.text # Face Vader you must!
           @authenticated.push {id: sender.getId(), time: date.getTime()}
-          response.addContent(new ContentFactory("text", "Passcode correct, timeout set to " + instance.config.auth_timeout + " minutes. You can now issue requests", @TelegramPlugin))
+          response.addContent(new ContentFactory("text", "Passcode correct, timeout set to " + @config.auth_timeout + " minutes. You can now issue requests", @TelegramPlugin))
           client.sendMessage(response)
           env.logger.info sender.getName() + " successfully authenticated"
           return
         
         for auth in @authenticated
           if auth.id is sender.getId()
-            if auth.time < (date.getTime()-(instance.config.auth_timeout*60000)) # You were carbon frozen for too long, Solo! Solo! Too Nakma Noya Solo!
+            if auth.time < (date.getTime()-(@config.auth_timeout*60000)) # You were carbon frozen for too long, Solo! Solo! Too Nakma Noya Solo!
               sender.setAuthenticated(false)
             else
               sender.setAuthenticated(true)
@@ -129,19 +130,19 @@ module.exports = (env) ->
           for req in @requests
             if req.request.toLowerCase() is request.slice(0, req.request.length) # test request against base commands and 'receive "command"' predicate in ruleset
               req.action()
-              if req.type is "base" or instance.config.confirmRuleTrigger
+              if req.type is "base" or @config.confirmRuleTrigger
                 response.addContent(new ContentFactory("text", req.response(request), @TelegramPlugin))
                 client.sendMessage(response)
               match = true
               break
           
           if !match
-            for act in @TelegramPlugin.getActionProviders()
+            for act in @actions
               context = createDummyParseContext()
               han = act.parseAction(request, context) # test if request is a valid action, e.g. "turn on switch-room1"
               if han?
                 han.actionHandler.executeAction()
-                if instance.config.confirmDeviceAction
+                if @instance.config.confirmDeviceAction
                   response.addContent(new ContentFactory("text", "Request '" + request + "' executed", @TelegramPlugin))
                   client.sendMessage(response)
                 match = true

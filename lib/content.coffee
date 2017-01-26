@@ -1,8 +1,8 @@
 module.exports = (env) ->
   
-  commons = require('pimatic-plugin-commons')(env)
   fs = require('fs')
   Promise = env.require 'bluebird'
+  commons = require('pimatic-plugin-commons')(env)
   
   class Content
     

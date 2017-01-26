@@ -1,8 +1,8 @@
 module.exports = (env) ->
   
+  Promise = env.require 'bluebird'
   commons = require('pimatic-plugin-commons')(env)
   TelegramBotClient = require('telebot')
-  Promise = env.require 'bluebird'
   
   class BotClient
     
