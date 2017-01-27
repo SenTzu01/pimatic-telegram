@@ -6,7 +6,6 @@ module.exports = (env) ->
   Listener = require('./lib/listener')(env)
   BotClient = require('./lib/botclient')(env)
   MessageFactory = require('./lib/messages')(env)
-  ContentFactory = require('./lib/content')(env)
   Recipient = require('./lib/recipient')
   
   class Telegram extends env.plugins.Plugin
@@ -178,7 +177,7 @@ module.exports = (env) ->
             i += 1
         )
       @m1.matchStringWithVars( (@m1, expr) =>
-        message.addContent(new ContentFactory(type, expr, TelegramPlugin.evaluateStringExpression))
+        message.addContent(expr, TelegramPlugin.evaluateStringExpression)
         match = @m1.getFullMatch()
       )
       

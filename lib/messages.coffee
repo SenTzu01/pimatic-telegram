@@ -2,10 +2,12 @@ module.exports = (env) ->
   
   Promise = env.require 'bluebird'
   commons = require('pimatic-plugin-commons')(env)
+  ContentFactory = require('./content')(env)
   
   class Message
   
-    constructor: (options) ->
+    constructor: (type = null, options...) ->
+      @type = type
       @recipients = []
       @content = null
       @client = null
@@ -30,16 +32,17 @@ module.exports = (env) ->
     addRecipient: (recipient) =>
       @recipients.push recipient
     
-    addContent: (content) =>
-      @content = content
-    
+    addContent: (content, callback) =>
+      @content = new ContentFactory(@type, content, callback)
+      
+      
     addSingleRecipient: (recipient) ->
       @recipients = []
       @addRecipient(recipient)
       
   class TextMessage extends Message
-    constructor: (options) ->
-      super(options)
+    constructor: (options...) ->
+      super(options...)
       @base = commons.base @, "TextMessage"
       
     send: (@client, log) =>
@@ -60,8 +63,8 @@ module.exports = (env) ->
       return parts.map( (part) => @processResult(@client.sendMessage(recipient.getId(), part), part, recipient.getName(), log) )
       
   class VideoMessage extends Message
-    constructor: (options) ->
-      super(options)
+    constructor: (options...) ->
+      super(options...)
       @base = commons.base @, "VideoMessage"
       
     send: (@client, log) =>
@@ -72,8 +75,8 @@ module.exports = (env) ->
       )
       
   class AudioMessage extends Message
-    constructor: (options) ->
-      super(options)
+    constructor: (options...) ->
+      super(options...)
       @base = commons.base @, "AudioMessage"
       
     send: (@client, log) =>
@@ -85,8 +88,8 @@ module.exports = (env) ->
         )
       
   class PhotoMessage extends Message
-    constructor: (options) ->
-      super(options)
+    constructor: (options...) ->
+      super(options...)
       @base = commons.base @, "PhotoMessage"
       
     send: (@client, log) =>
@@ -98,8 +101,8 @@ module.exports = (env) ->
         )
   
   class DocumentMessage extends Message
-    constructor: (options) ->
-      super(options)
+    constructor: (options...) ->
+      super(options...)
       @base = commons.base @, "DocumentMessage"
       
     send: (@client, log) =>
@@ -111,8 +114,8 @@ module.exports = (env) ->
         )
   
   class LocationMessage extends Message
-    constructor: (options) ->
-      super(options)
+    constructor: (options...) ->
+      super(options...)
       @base = commons.base @, "LocationMessage"
       
     send: (@client) =>
@@ -134,7 +137,7 @@ module.exports = (env) ->
     
     @getTypes: -> return Object.keys(types)
     
-    constructor: (type, args) ->
-      return new types[type] args
+    constructor: (type, args...) ->
+      return new types[type] type, args...
       
   return MessageFactory

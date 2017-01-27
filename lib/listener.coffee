@@ -2,14 +2,13 @@ module.exports = (env) ->
   
   BotClient = require('./botclient')(env)
   MessageFactory = require('./messages')(env)
-  ContentFactory = require('./content')(env)
   
   class Listener
   
     constructor: (@config, @TelegramPlugin) ->
       @devices = @TelegramPlugin.getDevices()
+      @parser = @TelegramPlugin.evaluateStringExpression
       @sender = (id) -> @TelegramPlugin.getSender(id)
-      @parser = (input) => @TelegramPlugin.evaluateStringExpression(input)
       @actions = -> @TelegramPlugin.getActionProviders()
       @client = null
       @authenticated = []
@@ -70,7 +69,6 @@ module.exports = (env) ->
         }]
       @botClient = new BotClient({token: @TelegramPlugin.getToken()})
       @response = new MessageFactory("text")
-      @content = new ContentFactory("text", null, @TelegramPlugin.evaluateStringExpression)
       
     start: (@client) =>
       env.logger.info "Starting Telegram listener"
@@ -87,8 +85,8 @@ module.exports = (env) ->
       @client.on('/*', (request) =>
         env.logger.debug "Bot command received: ", request
         @response.addSingleRecipient(@sender(request.from.id.toString()))
-        @content.set('Bot commands (/<cmd>) are not implemented')
-        @response.addContent(@content)
+        c = 'Bot commands (/<cmd>) are not implemented'
+        @response.addContent(c, @parser)
         @botClient.sendMessage(@response)
         
         return true
@@ -111,9 +109,11 @@ module.exports = (env) ->
         
         if @config.secret is request.text # Face Vader you must!
           @authenticated.push {id: sender.getId(), time: date.getTime()}
-          @content.set( __("Passcode correct, timeout set to %s minutes. You can now issue requests", @config.auth_timeout) )
-          @response.addContent(@content)
+          
+          c = __("Passcode correct, timeout set to %s minutes. You can now issue requests", @config.auth_timeout)
+          @response.addContent(c, @parser)
           @botClient.sendMessage(@response)
+          
           env.logger.info sender.getName() + " successfully authenticated"
           return
         
@@ -124,12 +124,11 @@ module.exports = (env) ->
             else
               sender.setAuthenticated(true)
         
-        
-        
         # request processing
         
         if sender.isAuthenticated()  # May the force be with you
           env.logger.debug __("Processing request '%s'", request.text)
+          
           match = false
           request = request.text.toLowerCase()
           
@@ -140,11 +139,8 @@ module.exports = (env) ->
               req.action()
               match = true
               if req.type is "base" or @config.confirmRuleTrigger
-                @content.set( req.response(request) )
-                @response.addContent(@content)
-                #@botClient.sendMessage(@response)
+                c = req.response(request)
               break
-          
           
           # match device actions
           if !match
@@ -156,28 +152,21 @@ module.exports = (env) ->
                 han.actionHandler.executeAction()
                 match = true
                 if @config.confirmDeviceAction
-                  @content.set( __("Request '%s' executed", request) )
-                  @response.addContent(@content)
-                  #@botClient.sendMessage(@response)
+                  c = __("Request '%s' executed", request)
                 break
             
           
           # request invalid
           if !match
-            @content.set( __("'%s' is not a valid request", request) )
-            @response.addContent(@content)
-            #@botClient.sendMessage(@response)
-            #return
-          #return
+            c = __("'%s' is not a valid request", request)
         
         # unauthorized
         else
-          @content.set("Please provide the passcode first and reissue your request after")
-          @response.addContent(@content)
-          #@botClient.sendMessage(@response)
-          #return
+          c = "Please provide the passcode first and reissue your request after"
           
-        @botClient.sendMessage(@response)
+        if c?
+          @response.addContent(c, @parser)
+          @botClient.sendMessage(@response)
       )
     
     createDummyParseContext = ->

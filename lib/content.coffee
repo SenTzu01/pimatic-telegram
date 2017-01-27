@@ -22,6 +22,11 @@ module.exports = (env) ->
       ).catch( (err) =>
         @base.rejectWithErrorString Promise.reject, __("Could not parse \"%s\"", @input)
       )
+    
+    isFloat: (input) ->
+      if (!isNaN(input) && input.toString().indexOf('.') isnt -1)
+        return true
+      return false
       
   class TextContent extends Content
     constructor: (input...) ->
@@ -68,15 +73,13 @@ module.exports = (env) ->
       super()
         .then( (gps) =>
           coord = gps.split(';')
-          if (!isNaN(coord[0]) && coord[0].toString().indexOf('.') isnt -1) and (!isNaN(coord[1]) && coord[1].toString().indexOf('.') isnt -1)
+          if @isFloat(coord[0]) and @isFloat(coord[1])
             Promise.resolve coord
           else
             @base.rejectWithErrorString Promise.reject, __("'%s' and '%s' are not valid GPS coordinates", coord[0], coord[1])
         ).catch( (err) =>
           @base.rejectWithErrorString Promise.reject, err
         )
-   
-  
       
   class ContentFactory
     types = {
