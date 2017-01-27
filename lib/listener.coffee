@@ -7,9 +7,9 @@ module.exports = (env) ->
   class Listener
   
     constructor: (@config, @TelegramPlugin) ->
-      @token = @TelegramPlugin.getToken()
       @devices = @TelegramPlugin.getDevices()
       @sender = (id) -> @TelegramPlugin.getSender(id)
+      @parser = (input) => @TelegramPlugin.evaluateStringExpression(input)
       @actions = -> @TelegramPlugin.getActionProviders()
       @client = null
       @authenticated = []
@@ -68,6 +68,9 @@ module.exports = (env) ->
                 return text
             return "device not found"
         }]
+      @botClient = new BotClient({token: @TelegramPlugin.getToken()})
+      @response = new MessageFactory("text")
+      @content = new ContentFactory("text", null, @TelegramPlugin.evaluateStringExpression)
       
     start: (@client) =>
       env.logger.info "Starting Telegram listener"
@@ -81,36 +84,36 @@ module.exports = (env) ->
       
     enableRequests: () =>
       
-      @client.on('/*', (msg) =>
-        env.logger.debug "Bot command received: ", msg
-        client = new BotClient({token: @token})
-        response = new MessageFactory("text")
-        response.addRecipient(@sender(msg.from.id.toString()))
-        response.addContent(new ContentFactory("text", 'Bot commands (/<cmd>) are not implemented', @TelegramPlugin))
-        client.sendMessage(response)
+      @client.on('/*', (request) =>
+        env.logger.debug "Bot command received: ", request
+        @response.addSingleRecipient(@sender(request.from.id.toString()))
+        @content.set('Bot commands (/<cmd>) are not implemented')
+        @response.addContent(@content)
+        @botClient.sendMessage(@response)
+        
         return true
       )
       
-      @client.on('text', (msg) =>
-
-        return if msg.text.charAt(0) is '/'
-        env.logger.debug "Request '", msg.text, "' received, processing..."
-        sender = @sender(msg.from.id.toString())
+      @client.on('text', (request) =>
         
-        # auth logic
+        return if request.text.charAt(0) is '/'
+        env.logger.debug "New Telegram message received..."
+        sender = @sender(request.from.id.toString())
+        
+        # authorization processing
+        
         if !sender.isAdmin() # Lord Vader force-chokes you !!
           env.logger.warn "auth_denied", sender.getName() + " is not authorized. Terminating request"
           return
         
         date = new Date()
-        client = new BotClient({token: @token})
-        response = new MessageFactory("text")
-        response.addRecipient(sender)
+        @response.addSingleRecipient(sender)
         
-        if @config.secret is msg.text # Face Vader you must!
+        if @config.secret is request.text # Face Vader you must!
           @authenticated.push {id: sender.getId(), time: date.getTime()}
-          response.addContent(new ContentFactory("text", "Passcode correct, timeout set to " + @config.auth_timeout + " minutes. You can now issue requests", @TelegramPlugin))
-          client.sendMessage(response)
+          @content.set( __("Passcode correct, timeout set to %s minutes. You can now issue requests", @config.auth_timeout) )
+          @response.addContent(@content)
+          @botClient.sendMessage(@response)
           env.logger.info sender.getName() + " successfully authenticated"
           return
         
@@ -122,43 +125,61 @@ module.exports = (env) ->
               sender.setAuthenticated(true)
         
         
-        request = msg.text.toLowerCase()
-        match = false
-        # command logic
+        
+        # request processing
+        
         if sender.isAuthenticated()  # May the force be with you
+          env.logger.debug __("Processing request '%s'", request.text)
+          match = false
+          request = request.text.toLowerCase()
+          
+          # match default commands and rule predicates
           env.logger.info "Request '" + request + "' received from " + sender.getName()
           for req in @requests
-            if req.request.toLowerCase() is request.slice(0, req.request.length) # test request against base commands and 'receive "command"' predicate in ruleset
+            if req.request.toLowerCase() is request.slice(0, req.request.length)
               req.action()
-              if req.type is "base" or @config.confirmRuleTrigger
-                response.addContent(new ContentFactory("text", req.response(request), @TelegramPlugin))
-                client.sendMessage(response)
               match = true
+              if req.type is "base" or @config.confirmRuleTrigger
+                @content.set( req.response(request) )
+                @response.addContent(@content)
+                #@botClient.sendMessage(@response)
               break
           
+          
+          # match device actions
           if !match
             for act in @actions
               context = createDummyParseContext()
-              han = act.parseAction(request, context) # test if request is a valid action, e.g. "turn on switch-room1"
+              # test if request is a valid action, e.g. "turn on switch-room1"
+              han = act.parseAction(request, context) 
               if han?
                 han.actionHandler.executeAction()
-                if @instance.config.confirmDeviceAction
-                  response.addContent(new ContentFactory("text", "Request '" + request + "' executed", @TelegramPlugin))
-                  client.sendMessage(response)
                 match = true
+                if @config.confirmDeviceAction
+                  @content.set( __("Request '%s' executed", request) )
+                  @response.addContent(@content)
+                  #@botClient.sendMessage(@response)
                 break
+            
           
+          # request invalid
           if !match
-            response.addContent(new ContentFactory("text", "'" + request + "' is not a valid request", @TelegramPlugin))
-            client.sendMessage(response)
-            return
-          return
-        else # Vader face you must
-          response.addContent(new ContentFactory("text", "Please provide the passcode first and reissue your request after", @TelegramPlugin))
-          client.sendMessage(response)
-          return
+            @content.set( __("'%s' is not a valid request", request) )
+            @response.addContent(@content)
+            #@botClient.sendMessage(@response)
+            #return
+          #return
+        
+        # unauthorized
+        else
+          @content.set("Please provide the passcode first and reissue your request after")
+          @response.addContent(@content)
+          #@botClient.sendMessage(@response)
+          #return
+          
+        @botClient.sendMessage(@response)
       )
-      
+    
     createDummyParseContext = ->
       variables = {}
       functions = {}

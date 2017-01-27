@@ -6,17 +6,18 @@ module.exports = (env) ->
   
   class Content
     
-    constructor: (input, @TelegramPlugin) ->
-      
+    constructor: (input = null, @evaluateString) ->
+      @input = input
+      @base = commons.base @, "Content"
+      @set(input)
+   
+    set: (input) ->
       if typeof input is "string" or typeof input is "number"
         input = ['"' + input + '"']
       @input = input
-      @base = commons.base @, "Content"
-   
-    set: (@input) ->
     
     get: () =>
-      @TelegramPlugin.evaluateStringExpression(@input).then( (content) =>
+      @evaluateString(@input).then( (content) =>
         return Promise.resolve content
       ).catch( (err) =>
         @base.rejectWithErrorString Promise.reject, __("Could not parse \"%s\"", @input)

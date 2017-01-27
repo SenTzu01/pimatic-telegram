@@ -32,6 +32,10 @@ module.exports = (env) ->
     
     addContent: (content) =>
       @content = content
+    
+    addSingleRecipient: (recipient) ->
+      @recipients = []
+      @addRecipient(recipient)
       
   class TextMessage extends Message
     constructor: (options) ->

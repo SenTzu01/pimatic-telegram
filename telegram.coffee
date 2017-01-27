@@ -69,7 +69,7 @@ module.exports = (env) ->
               if predicate.handler instanceof TelegramPredicateHandler
                   @registerCmd(predicate.handler)
     
-    evaluateStringExpression: (value) ->
+    evaluateStringExpression: (value) =>
       return @framework.variableManager.evaluateStringExpression(value)
     
     parseVariableExpression: (value) ->
@@ -86,25 +86,16 @@ module.exports = (env) ->
     
     getSender: (id) =>
       return @getRecipient(id)
-      
-    getConfig: () =>
-      return @config
-    
+
     getDeviceById: (id) ->
       return @framework.deviceManager.getDeviceById(id)
-      
-    getDeviceClasses: () =>
-      return @framework.deviceManager.getDeviceClasses()
-    
+
     getDevices: () =>
       return @framework.deviceManager.getDevices()
     
     getActionProviders: () =>
       return @framework.ruleManager.actionProviders
-        
-    getFramework: () =>
-      return @framework
-      
+          
     registerCmd: (@cmd) =>
       @emit "cmdRegistered", @cmd
     
@@ -187,7 +178,7 @@ module.exports = (env) ->
             i += 1
         )
       @m1.matchStringWithVars( (@m1, expr) =>
-        message.addContent(new ContentFactory(type, expr, TelegramPlugin))
+        message.addContent(new ContentFactory(type, expr, TelegramPlugin.evaluateStringExpression))
         match = @m1.getFullMatch()
       )
       
@@ -212,7 +203,8 @@ module.exports = (env) ->
       if simulate
         return __("would send telegram \"%s\"", @message.content.get())
       else
-        client = new BotClient({token: TelegramPlugin.getToken()})
+        options = {token: TelegramPlugin.getToken()}
+        client = new BotClient(options)
         client.sendMessage(@message, true)
   
   class TelegramReceiverDevice extends env.devices.SwitchActuator
@@ -247,8 +239,7 @@ module.exports = (env) ->
       )
       
     startListener: () =>
-      
-      @client = new BotClient({
+      options = {
         token: TelegramPlugin.getToken()
         polling: {
           interval: @config.interval
@@ -256,8 +247,8 @@ module.exports = (env) ->
           limit: @config.limit
           retryTimeout: @config.retryTimeout
         }
-      })
-      
+      }
+      @client = new BotClient(options)
       @client.startListener(@listener)
      
     stopListener: () =>
