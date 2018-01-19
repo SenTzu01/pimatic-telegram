@@ -4,6 +4,10 @@ module.exports = {
     title: "Telegram Receiver configuration options"
     type: "object"
     properties:
+      disable2FA:
+        description: "Setting disable2FA to Yes, will allow users to send requests without providing a password. This lowers security!"
+        type: "boolean"
+        default: false
       secret:
         description: "Passcode to provide before requests are accepted"
         type: "string"

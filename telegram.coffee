@@ -342,7 +342,7 @@ module.exports = (env) ->
     stop: (@client) =>
       env.logger.info "Stopping Telegram listener"
       @authenticated = []
-      @client.disconnect()
+      @client.stop()
       
     enableRequests: () =>
       @client.on('/*', (msg) =>
@@ -371,12 +371,12 @@ module.exports = (env) ->
         response = new MessageFactory("text")
         response.addRecipient(sender)
         
-        if instance.config.secret is msg.text # Face Vader you must!
+        if instance.config.secret is msg.text or instance.config.disable2FA # Face Vader you must!
           @authenticated.push {id: sender.getId(), time: date.getTime()}
           response.addContent(new ContentFactory("text", "Passcode correct, timeout set to " + instance.config.auth_timeout + " minutes. You can now issue requests"))
-          client.sendMessage(response)
+          client.sendMessage(response) unless instance.config.disable2FA
           env.logger.info sender.getName() + " successfully authenticated"
-          return
+          return unless instance.config.disable2FA
         
         for auth in @authenticated
           if auth.id is sender.getId()
