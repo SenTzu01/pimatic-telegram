@@ -464,6 +464,7 @@ module.exports = (env) ->
   class BotClient
     
     constructor: (options) ->
+      options.buildInPlugins = []
       @base = commons.base @, "BotClient"
       @client = new TelegramBotClient(options)
     
