@@ -1,0 +1,102 @@
+Installation and Configuration:
+========================
+
+### Obtain a Telegram client
+
+- Go to the Apple store or Android Play store to install the client on your mobile and follow instructions
+
+### Create a Telegram Bot
+
+- With your Telegram client start a conversation with @BotFather
+- Send a message: <b>/newbot</b>
+- Follow the on-screen instructions
+- When choosing a name for your bot, ensure the name ends in "bot", e.g. MyAwesomePimaticBot
+- After completing the required steps, BotFather will provide a token (similar to this: <b>784324329:EETRNJU3jQEGWQdjNv3llb4bnDSDREGuuuL</b>)
+- <b>Make sure you copy this token, and keep it secret !</b>
+
+### Obtain your chatID
+
+- With your Telegram client start a conversation with your bot (@MyAwesomePimaticBot)
+- send a message, doesn't matter what the content is
+- in your browser, type: https://api.telegram.org/bot784324329:EETRNJU3jQEGWQdjNv3llb4bnDSDREGuuuL/getUpdates (replace the string after bot with your own token)
+- in your browser you will see a JSON response similar to the below:
+````json
+{
+  "ok":true,
+  "result":
+  [{
+    "update_id":100,
+    "message":{
+      "message_id":12,
+      "from":
+      {
+        "id": "<this_is_the_number_you_need!>",
+        "first_name":"fname","username":"uname"
+      },
+      "chat":
+      {
+        "id":123456789,
+        "first_name":"fname",
+        "username":"uname",
+        "type":"private"
+      },
+      "date":1481753058,
+      "text":"Hello World!"
+    }
+  }]
+}
+````
+- Look for the number after "id", and save it
+- Repeat for each recipient you want to register in Pimatic
+
+### Install the Plugin (required for using the send telegram functions)
+
+- Install Pimatic-Telegram via the frontend (preferred) and check if it has been activated. 
+- Add the API token in the designated field, and add recipients as required (Friendly name, chat ID, enabled flag)
+
+Alternatively add it to the Plugin section of your config.json:
+````json
+{
+  "plugin": "telegram",
+  "apiToken": "<bot api_token from previous step>",
+  "active": true,
+  "recipients": [
+    {
+      "name": "FriendlyName",
+      "userChatId": "<user_id from previous step>",
+      "enabled": true,
+      "admin": false 
+    }]
+}
+````
+<i> You can specify multiple recipients. Enabled should be set to true for a recipient to receive messages</i>
+- Check if the plugin has been activated. If not activate it
+- Restart Pimatic
+
+### Install a Telegram Receiver device (required to send client requests to Pimatic, and enable the <i>telegram received</i> rule predicate)
+
+- Define a new TelegramReceiverDevice via the frontend (preferred)
+  - Make sure to change the default secret !
+- To allow users to send requests to Pimatic, set their Admin flag to enabled in the frontend or in config.json
+````json
+"recipients": [
+  {
+    "name": "FriendlyName",
+    "userChatId": "<user_id from previous step>",
+    "enabled": true,
+    "admin": true 
+  }
+````
+- Restart Pimatic
+- Send commands from Telegram to Pimatic, a good start is sending "help"
+
+Alternatively add the device directly to the Devices section your config.json:
+````json
+{
+  "secret": "change_me_now!",
+  "auth_timeout": 5,
+  "id": "telegram-receiver",
+  "name": "Telegram Receiver",
+  "class": "TelegramReceiverDevice"
+}
+````

@@ -9,9 +9,10 @@
     "README.md",
     "telegram-config-schema.coffee",
     "telegram-device-config-schema.coffee",
-    "LICENSE"
+    "LICENSE",
+    "INSTALL"
   ],
-  "version": "1.1.6",
+  "version": "1.1.8",
   "homepage": "https://github.com/SenTzu01/pimatic-telegram",
   "repository": {
     "type": "git",
@@ -33,10 +34,10 @@
     "url": "https://github.com/SenTzu01/pimatic-telegram/issues"
   },
   "devDependencies": {
-    "babel-core": "^6.21.0",
-    "babel-register": "^6.18.0",
+    "babel-core": "^6.26.0",
+    "babel-preset-es2015": "^6.24.1",
     "gulp": "^3.9.1",
-    "gulp-babel": "^6.1.2"
+    "gulp-babel": "^7.0.0"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
