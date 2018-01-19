@@ -12,16 +12,16 @@ GULP=$TELEGRAM_DIR/node_modules/gulp/bin/gulp.js
 
 cd $TELEGRAM_DIR/node_modules
 if [ ! -d "gulp" ]; then
-  npm install gulp --save-dev
+  npm install --save-dev gulp
 fi
 if [ ! -d "gulp-babel" ]; then
-  npm install gulp-babel --save-dev
+  npm install --save-dev gulp-babel
 fi
 if [ ! -d "babel-core" ]; then
-  npm install babel-core --save-dev
+  npm install --save-dev babel-core
 fi
 if [ ! -d "babel-preset-es2015" ]; then
-  npm install babel-preset-es2015 --save-dev
+  npm install --save-dev babel-preset-es2015
 fi
 
 # install telebot and gulp with dependencies
@@ -48,7 +48,7 @@ fi
 cd $TELEGRAM_DIR
 nodejs $GULP # automatically loads gulpfile.babel.js
 
-sudo npm install -g json
+sudo npm install -g --save-dev json
 cd $TELEBOT_DIR
 json -I -f package.json -e 'this.main="dist/telebot.js"'
 json -I -f package.json -e 'this.engines.node=">= 4.0.0"'
