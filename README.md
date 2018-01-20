@@ -1,4 +1,4 @@
-pimatic-Telegram
+pimatic-telegram
 =======================
 
 Pimatic plugin to provide bi-directional integration with Telegram, the free messaging system for mobile and desktop devices
@@ -16,7 +16,7 @@ Pimatic plugin to provide bi-directional integration with Telegram, the free mes
 - Allowed file formats depend on Telegram supported formats, .mp3 (audio), .mp4, .avi (video), .jpg and .png (photo) have been validated (Max. allowed file size for media and doc types is 50MB, set by Telegram.org)
 
 ### Rule syntax and examples: 
-<b>send < text | video | audio | photo | doc | gps > telegram to [ recipient1 recipient2 ... recipientn ] < "text with $variables"  | "/local/path/with/$variables/to/file" | "$latitude;$longitude" ></b><br/>
+<b>send < text | video | audio | photo | doc | gps > telegram to [ recipient1 recipient2 ... recipientN ] < "text with $variables"  | "/local/path/with/$variables/to/file" | "$latitude;$longitude" ></b><br/>
 and / or:<br/>
 <b>telegram received "user-defined-keyword"</b><br/>
 
@@ -27,7 +27,7 @@ and / or:<br/>
 
 <i>If you do not provide recipients, a message will be sent to all enabled recipients</i><br>
  
-### Requests sent from messaging client to Pimatic:
+### Available commands from the messaging client to Pimatic:
 <b>help</b> - lists available built-in commands and user-defined predicates</br>
 <b>list devices</b> - Summary list of all devices</br>
 <b>get device device_name | device_id</b> - get details on a device</br>
@@ -39,7 +39,7 @@ Preinstallation Requirements
 ========================
 - A Telegram client (www.telegram.org)
 - A Telegram bot
-- Obtain chatID's for all Telegram recipiets you would like to receive messages
+- Obtain chatID's for all Telegram recipients which are allowed to interact with Pimatic
 
 <i>See INSTALL in your Pimatic plugin dir or GitHub for instructions on these prerequisites</i>
 
