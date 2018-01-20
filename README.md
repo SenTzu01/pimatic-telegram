@@ -41,57 +41,10 @@ Preinstallation Requirements
 - A Telegram bot
 - Obtain chatID's for all Telegram recipiets you would like to receive messages
 
+<i>See INSTALL in your Pimatic plugin dir or GitHub for instructions on these prerequisites</i>
 
 Installation and Configuration:
 ========================
-
-### Obtain a Telegram client
-
-- Go to the Apple store or Android Play store to install the client on your mobile and follow instructions
-
-### Create a Telegram Bot
-
-- With your Telegram client start a conversation with @BotFather
-- Send a message: <b>/newbot</b>
-- Follow the on-screen instructions
-- When choosing a name for your bot, ensure the name ends in "bot", e.g. MyAwesomePimaticBot
-- After completing the required steps, BotFather will provide a token (similar to this: <b>784324329:EETRNJU3jQEGWQdjNv3llb4bnDSDREGuuuL</b>)
-- <b>Make sure you copy this token, and keep it secret !</b>
-
-### Obtain your chatID
-
-- With your Telegram client start a conversation with your bot (@MyAwesomePimaticBot)
-- send a message, doesn't matter what the content is
-- in your browser, type: https://api.telegram.org/bot784324329:EETRNJU3jQEGWQdjNv3llb4bnDSDREGuuuL/getUpdates (replace the string after bot with your own token)
-- in your browser you will see a JSON response similar to the below:
-````json
-{
-  "ok":true,
-  "result":
-  [{
-    "update_id":100,
-    "message":{
-      "message_id":12,
-      "from":
-      {
-        "id": "<this_is_the_number_you_need!>",
-        "first_name":"fname","username":"uname"
-      },
-      "chat":
-      {
-        "id":123456789,
-        "first_name":"fname",
-        "username":"uname",
-        "type":"private"
-      },
-      "date":1481753058,
-      "text":"Hello World!"
-    }
-  }]
-}
-````
-- Look for the number after "id", and save it
-- Repeat for each recipient you want to register in Pimatic
 
 ### Install the Plugin (required for using the send telegram functions)
 
