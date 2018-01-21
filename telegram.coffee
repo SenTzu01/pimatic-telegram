@@ -63,10 +63,11 @@ module.exports = (env) ->
     
     reparsePredicates: (device) =>
       if device instanceof TelegramReceiverDevice
-          for rule in @framework.ruleManager.getRules()
-            for predicate in rule.predicates
-              if predicate.handler instanceof TelegramPredicateHandler
-                  @registerCmd(predicate.handler)
+        @emit 'changedTelegramReceiverDevice', device
+        for rule in @framework.ruleManager.getRules()
+          for predicate in rule.predicates
+            if predicate.handler instanceof TelegramPredicateHandler
+                @registerCmd(predicate.handler)
     
     evaluateStringExpression: (value) ->
       return @framework.variableManager.evaluateStringExpression(value)
@@ -164,8 +165,9 @@ module.exports = (env) ->
       type = null
       message = null
       match = null
+      reply = false
       
-      # Action arguments: send [[telegram] | [text(default) | video | audio | photo] telegram to ]] [1strecipient1 ... Nthrecipient] "message | path | url"
+      # Action arguments: send [<text(default) | video | audio | photo> telegram to <sender | recipient1 ... recipientN> <"message" | "path" | "url">]
       @m1 = M(input, context)
       @m1.match('send ')
         .match(MessageFactory.getTypes().map( (t) => t + ' '), (@m1, t) =>
@@ -177,11 +179,14 @@ module.exports = (env) ->
           i = 0
           more = true
           all = @config.recipients.map( (r) => r.name + ' ')
+          all.push 'sender ' # Add sender alias for the user having sent the predicate triggering the action
           while more and i < all.length
             more = false if @m1.getRemainingInput().charAt(0) is '"' or null
              
-            @m1.match(all, (@m1, r) =>
-              message.addRecipient(new Recipient(obj)) for obj in @config.recipients when obj.name is r.trim() and obj.enabled
+            @m1.match(all, (@m1, recipient) =>
+              recipient = recipient.trim()
+              message.addRecipient(new Recipient(obj)) for obj in @config.recipients when obj.name is recipient and obj.enabled
+              reply = true if recipient is 'sender'
             )
             i += 1
         )
@@ -191,13 +196,13 @@ module.exports = (env) ->
       )
       
       if match?
-        if message.recipients.length < 1
+        if message.recipients.length < 1 and not reply
           message.addRecipient(new Recipient(obj)) for obj in @config.recipients when obj.enabled
         env.logger.debug "Rule matched: '", match, "' and passed to Action handler"
         return {
           token: match
           nextInput: input.substring(match.length)
-          actionHandler: new TelegramActionHandler(@framework, @config, message)
+          actionHandler: new TelegramActionHandler(@framework, @config, message, reply)
         }
         
       else    
@@ -205,15 +210,44 @@ module.exports = (env) ->
         
   class TelegramActionHandler extends env.actions.ActionHandler
   
-    constructor: (@framework, @config, @message) ->
+    constructor: (@framework, @config, @message, reply) ->
+      @listeners = []
+      
+      if reply
+        for id, device of @framework.deviceManager.devices when device instanceof TelegramReceiverDevice
+          @listeners.push device.listener
+          @_addListener(device.listener)  
+        @framework.on 'changedTelegramReceiverDevice', @_changeListener
+          
+    _onReceivedRulePredicate: (req) =>
+      @message.recipients.push req.sender
+      env.logger.info 'Resolving [sender] to: ' + req.sender.getName()
+      
+    _addListener: (listener) ->
+      listener.on 'receivedRulePredicate', @_onReceivedRulePredicate
+    
+    _changeListener: (listener) ->
+      @_removeListener(listener)
+      @_addListener(listener)
+    
+    _removeListener: (listener) ->
+      listener.removeListener 'receivedRulePredicate', @_onReceivedRulePredicate
       
     executeAction: (simulate) =>
       if simulate
         return __("would send telegram \"%s\"", @message.content.get())
       else
+      
         client = new BotClient({token: TelegramPlugin.getToken()})
         client.sendMessage(@message, true)
-  
+        
+    destroy: () ->
+      @framework.removeListener 'changedTelegramReceiverDevice', @_changeListener
+      @listeners.map( (listener) =>
+        @_removeListener(listener)
+      )
+      
+      
   class TelegramReceiverDevice extends env.devices.SwitchActuator
         
     constructor: (@config, lastState, @framework) ->
@@ -268,7 +302,7 @@ module.exports = (env) ->
       @stopListener()
       super()
   
-  class Listener
+  class Listener extends events.EventEmitter
   
     constructor: (id) ->
       @id  = id
@@ -331,7 +365,7 @@ module.exports = (env) ->
                 return text
             return "device not found"
         }]
-      
+      #@queue = []
       
       
     start: (@client) =>
@@ -393,9 +427,13 @@ module.exports = (env) ->
           env.logger.info "Request '" + request + "' received from " + sender.getName()
           for req in @requests
             if req.request.toLowerCase() is request.slice(0, req.request.length) # test request against base commands and 'receive "command"' predicate in ruleset
+              req.sender = sender
+              @emit('receivedRulePredicate', req) if req.type is 'rule'
               req.action()
+              
               if req.type is "base" or instance.config.confirmRuleTrigger
-                response.addContent(new ContentFactory("text", req.response(request)))
+                #response.addContent(new ContentFactory("text", req.response(request))) # request variable is unnecessary
+                response.addContent(new ContentFactory("text", req.response()))
                 client.sendMessage(response)
               match = true
               break
@@ -432,10 +470,12 @@ module.exports = (env) ->
       if !@requestIsRegistered(req)
         obj = {
           request: req.getCommand()
-          action: (msg) => req.emit('change', 'event')
+          action: () => req.emit('change', 'event')
           protected: true
           type: "rule"
-          response: (msg) => return "Rule condition '" + obj.request + "' triggered"
+          sender: null
+          #response: (msg) => return "Rule condition '" + obj.request + "' triggered by " + obj.user # msg variable is unneccesary
+          response: () => return "Rule condition '" + obj.request + "' triggered by " + obj.sender
         }
         @requests.push obj
         env.logger.info "Listener enabled ruleset command: '", obj.request, "'"
