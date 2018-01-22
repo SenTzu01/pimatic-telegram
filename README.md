@@ -1,4 +1,4 @@
-pimatic-telegram
+pimatic-Telegram
 =======================
 
 Pimatic plugin to provide bi-directional integration with Telegram, the free messaging system for mobile and desktop devices
@@ -16,10 +16,11 @@ Pimatic plugin to provide bi-directional integration with Telegram, the free mes
 - Allowed file formats depend on Telegram supported formats, .mp3 (audio), .mp4, .avi (video), .jpg and .png (photo) have been validated (Max. allowed file size for media and doc types is 50MB, set by Telegram.org)
 
 ### Rule syntax and examples: 
-<b>send < text | video | audio | photo | doc | gps > telegram to [ recipient1 recipient2 ... recipientN ] < "text with $variables"  | "/local/path/with/$variables/to/file" | "$latitude;$longitude" ></b><br/>
+<b>send < text | video | audio | photo | doc | gps > telegram to [sender | recipient1 recipient2 ... recipientn ] < "text with $variables"  | "/local/path/with/$variables/to/file" | "$latitude;$longitude" ></b><br/>
 and / or:<br/>
 <b>telegram received "user-defined-keyword"</b><br/>
 
+- send text telegram to sender "reply only to user having send request" <i>Can only be used in combination with "telegram received... rule predicate"</i>
 - send text telegram to "ALERT! Pimatic detected movement in room: $room while nobody is home! Is someone unexpectedly making you a cup of tea?"<br/>
 - send video telegram to Owner1 Owner2 "/home/pi/front_door_camera.mp4"<br/>
 - when it is 08:00 and $phone-child.location is not "School" send gps telegram to Parent1 Parent2 "$phone-child.latitude;$phone-child.longitude"<br/>
@@ -27,7 +28,7 @@ and / or:<br/>
 
 <i>If you do not provide recipients, a message will be sent to all enabled recipients</i><br>
  
-### Available commands from the messaging client to Pimatic:
+### Requests sent from messaging client to Pimatic:
 <b>help</b> - lists available built-in commands and user-defined predicates</br>
 <b>list devices</b> - Summary list of all devices</br>
 <b>get device device_name | device_id</b> - get details on a device</br>
@@ -39,12 +40,59 @@ Preinstallation Requirements
 ========================
 - A Telegram client (www.telegram.org)
 - A Telegram bot
-- Obtain chatID's for all Telegram recipients which are allowed to interact with Pimatic
+- Obtain chatID's for all Telegram recipiets you would like to receive messages
 
-<i>See INSTALL in your Pimatic plugin dir or GitHub for instructions on these prerequisites</i>
 
 Installation and Configuration:
 ========================
+
+### Obtain a Telegram client
+
+- Go to the Apple store or Android Play store to install the client on your mobile and follow instructions
+
+### Create a Telegram Bot
+
+- With your Telegram client start a conversation with @BotFather
+- Send a message: <b>/newbot</b>
+- Follow the on-screen instructions
+- When choosing a name for your bot, ensure the name ends in "bot", e.g. MyAwesomePimaticBot
+- After completing the required steps, BotFather will provide a token (similar to this: <b>784324329:EETRNJU3jQEGWQdjNv3llb4bnDSDREGuuuL</b>)
+- <b>Make sure you copy this token, and keep it secret !</b>
+
+### Obtain your chatID
+
+- With your Telegram client start a conversation with your bot (@MyAwesomePimaticBot)
+- send a message, doesn't matter what the content is
+- in your browser, type: https://api.telegram.org/bot784324329:EETRNJU3jQEGWQdjNv3llb4bnDSDREGuuuL/getUpdates (replace the string after bot with your own token)
+- in your browser you will see a JSON response similar to the below:
+````json
+{
+  "ok":true,
+  "result":
+  [{
+    "update_id":100,
+    "message":{
+      "message_id":12,
+      "from":
+      {
+        "id": "<this_is_the_number_you_need!>",
+        "first_name":"fname","username":"uname"
+      },
+      "chat":
+      {
+        "id":123456789,
+        "first_name":"fname",
+        "username":"uname",
+        "type":"private"
+      },
+      "date":1481753058,
+      "text":"Hello World!"
+    }
+  }]
+}
+````
+- Look for the number after "id", and save it
+- Repeat for each recipient you want to register in Pimatic
 
 ### Install the Plugin (required for using the send telegram functions)
 
@@ -98,7 +146,9 @@ Alternatively add the device directly to the Devices section your config.json:
 }
 ````
 
-### Known issues / Limitations:
+### Known issues:
+
+- Since version 1.1.12 Rules according to the previous format (send telegram [recipient1 ...] "message") are NO LONGER supported. When upgrading, change your rules to the new format according to this manual (see rule syntax earlier)
 - "execute" cannot be used as a keyword, to prevent vulnerability exploitation. This is a security concern and will not likely be changed in the near future
 
 ### FAQ
