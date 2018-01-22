@@ -148,7 +148,6 @@ Alternatively add the device directly to the Devices section your config.json:
 
 ### Known issues:
 
-- Since version 1.1.12 Rules according to the previous format (send telegram [recipient1 ...] "message") are NO LONGER supported. When upgrading, change your rules to the new format according to this manual (see rule syntax earlier)
 - "execute" cannot be used as a keyword, to prevent vulnerability exploitation. This is a security concern and will not likely be changed in the near future
 
 ### FAQ
