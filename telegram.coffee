@@ -46,13 +46,13 @@ module.exports = (env) ->
       @framework.ruleManager.addPredicateProvider(new TelegramPredicateProvider(@framework, @config))
       @framework.ruleManager.addActionProvider(new TelegramActionProvider(@framework, @config))
       
+
       
       deviceConfigDef = require("./telegram-device-config-schema")
       @framework.deviceManager.registerDeviceClass("TelegramReceiverDevice", {
         configDef: deviceConfigDef.TelegramReceiverDevice, 
-        createCallback: (config, lastState) => new TelegramReceiverDevice(config, lastState, @framework)
+        createCallback: (config, lastState) => new TelegramReceiverDevice(config, lastState)
       })
-      
       
       @framework.on('deviceAdded', (device) =>
         @reparsePredicates(device)
@@ -60,13 +60,24 @@ module.exports = (env) ->
       @framework.on('deviceChanged', (device) => # re-add predicate actions to listener on TelegramReceiverDevice config changes
         @reparsePredicates(device)
       )
-    
+      
+      @framework.ruleManager.on 'ruleAdded', @_evaluateRuleEvent
+      @framework.ruleManager.on 'ruleChanged', @_evaluateRuleEvent
+      
+    _evaluateRuleEvent: (rule) =>
+      rule.predicates.map( (predicate) =>
+        if predicate.handler instanceof TelegramPredicateHandler
+          @emit 'eventTelegramPredicate', rule
+          return
+      )
+      
     reparsePredicates: (device) =>
       if device instanceof TelegramReceiverDevice
-          for rule in @framework.ruleManager.getRules()
-            for predicate in rule.predicates
-              if predicate.handler instanceof TelegramPredicateHandler
-                  @registerCmd(predicate.handler)
+        @emit 'changedTelegramReceiverDevice', device
+        for rule in @framework.ruleManager.getRules()
+          for predicate in rule.predicates
+            if predicate.handler instanceof TelegramPredicateHandler
+                @registerCmd(predicate.handler)
     
     evaluateStringExpression: (value) ->
       return @framework.variableManager.evaluateStringExpression(value)
@@ -142,6 +153,7 @@ module.exports = (env) ->
 
   class TelegramPredicateHandler extends env.predicates.PredicateHandler
     constructor: (framework, @command) ->
+      @ruleId = null
       super()
 
     setup: ->
@@ -150,8 +162,11 @@ module.exports = (env) ->
 
     getValue: -> Promise.resolve false
     getType: -> 'event'
-    getCommand: -> "#{@command}"
-
+    getCommand: -> @command
+    
+    setRuleId: (id) -> 
+      @ruleId = id
+      
     destroy: ->
       TelegramPlugin.deregisterCmd this
       super()
@@ -164,8 +179,9 @@ module.exports = (env) ->
       type = null
       message = null
       match = null
+      reply = false
       
-      # Action arguments: send [[telegram] | [text(default) | video | audio | photo] telegram to ]] [1strecipient1 ... Nthrecipient] "message | path | url"
+      # Action arguments: send [<text(default) | video | audio | photo> telegram to <sender | recipient1 ... recipientN> <"message" | "path" | "url">]
       @m1 = M(input, context)
       @m1.match('send ')
         .match(MessageFactory.getTypes().map( (t) => t + ' '), (@m1, t) =>
@@ -177,11 +193,14 @@ module.exports = (env) ->
           i = 0
           more = true
           all = @config.recipients.map( (r) => r.name + ' ')
+          all.push 'sender ' # Add sender alias for the user having sent the predicate triggering the action
           while more and i < all.length
             more = false if @m1.getRemainingInput().charAt(0) is '"' or null
              
-            @m1.match(all, (@m1, r) =>
-              message.addRecipient(new Recipient(obj)) for obj in @config.recipients when obj.name is r.trim() and obj.enabled
+            @m1.match(all, (@m1, recipient) =>
+              recipient = recipient.trim()
+              message.addRecipient(new Recipient(obj)) for obj in @config.recipients when obj.name is recipient and obj.enabled
+              reply = true if recipient is 'sender'
             )
             i += 1
         )
@@ -191,13 +210,13 @@ module.exports = (env) ->
       )
       
       if match?
-        if message.recipients.length < 1
+        if message.recipients.length < 1 and not reply
           message.addRecipient(new Recipient(obj)) for obj in @config.recipients when obj.enabled
         env.logger.debug "Rule matched: '", match, "' and passed to Action handler"
         return {
           token: match
           nextInput: input.substring(match.length)
-          actionHandler: new TelegramActionHandler(@framework, @config, message)
+          actionHandler: new TelegramActionHandler(@framework, @config, @, message, reply)
         }
         
       else    
@@ -205,23 +224,77 @@ module.exports = (env) ->
         
   class TelegramActionHandler extends env.actions.ActionHandler
   
-    constructor: (@framework, @config, @message) ->
+    constructor: (@framework, @config, @actionProvider, @message, @reply) ->
+      @listeners = []
+      @trigger = null
+      @ruleId = null
       
+      if @reply
+        for id, device of @framework.deviceManager.devices when device instanceof TelegramReceiverDevice
+          @listeners.push device.listener
+          @_addListener(device.listener)
+        @framework.on 'changedTelegramReceiverDevice', @_changeListener
+          
+    _onReceivedRulePredicate: (cmd, sender, id) =>
+      if cmd is @trigger
+        env.logger.debug 'TelegramActionHandler::_onReceivedRulePredicate event => ruleId: ' + @ruleId + ', cmd: ' + cmd + ', trigger: ' + @trigger + ', sender: ' + sender.getName()
+        @message.recipients = []
+        @message.recipients.push sender
+        env.logger.info @ruleId + ': Resolving [sender] to: ' + sender.getName()
+      
+    _addListener: (listener) -> listener.on 'receivedRulePredicate', @_onReceivedRulePredicate
+    
+    _changeListener: (listener) ->
+      @_removeListener(listener)
+      @_addListener(listener)
+    
+    _removeListener: (listener) -> listener.removeListener 'receivedRulePredicate', @_onReceivedRulePredicate
+    
+    mapCommand: (id, trigger) ->
+      @setRuleId(id)
+      @setTrigger(trigger)
+      
+    setTrigger: (trigger) -> @trigger = trigger
+    setRuleId: (id) -> @ruleId = id
+    
     executeAction: (simulate) =>
       if simulate
         return __("would send telegram \"%s\"", @message.content.get())
       else
+        return Promise.reject '"send telegram to sender ..." action syntax can only be used in combination with "when telegram ... received" as rule predicate!' if @reply and not @trigger?        
+        env.logger.debug 'TelegramActionHandler::executeAction: => ruleId: ' + @ruleId + ', trigger: ' + @trigger + ', sending message'
         client = new BotClient({token: TelegramPlugin.getToken()})
-        client.sendMessage(@message, true)
-  
+        return client.sendMessage(@message, true)
+        
+    destroy: () ->
+      @framework.removeListener 'changedTelegramReceiverDevice', @_changeListener
+      @listeners.map( (listener) =>
+        @_removeListener(listener)
+      )
+      
+      
   class TelegramReceiverDevice extends env.devices.SwitchActuator
         
-    constructor: (@config, lastState, @framework) ->
+    constructor: (@config, lastState) ->
       @id = @config.id
       @name = @config.name
       @_state = lastState?.state?.value or @config.stateStartup
       
       super()
+      
+      TelegramPlugin.on('eventTelegramPredicate', (rule) =>
+        rule.predicates.map( (predicate) =>
+          if predicate.handler instanceof TelegramPredicateHandler
+            rule.actions.map( (action) =>
+              if action.handler instanceof TelegramActionHandler
+                predicate.handler.setRuleId(rule.id)
+                action.handler.mapCommand(rule.id, predicate.handler.command)
+                env.logger.debug 'TelegramReceiverDevice::constructor => Mapping Telegram predicate command: ' + predicate.handler.command + ' to TelegramActionHandler for rule.id: ' + rule.id
+                return
+            )
+        )
+        
+      )
       
       @listener = new Listener(@id)
       TelegramPlugin.on('cmdRegistered', (cmd) =>
@@ -230,6 +303,8 @@ module.exports = (env) ->
       TelegramPlugin.on('cmdDeregistered', (cmd) =>
         @listener.requestDelete(cmd)
       )
+      
+      
       
       @startListener() if @_state
           
@@ -268,43 +343,45 @@ module.exports = (env) ->
       @stopListener()
       super()
   
-  class Listener
+  class Listener extends events.EventEmitter
   
     constructor: (id) ->
       @id  = id
       @client = null
       @authenticated = []
       @requests = [{
-          request: "help"
+          command: "help"
           type: "base"
           action: -> return null
           protected: false
           response: (msg) =>
-            text = "Default commands: \n"
+            text = "Default commands:\n"
             for req in @requests
               if req.type is "base"
-                text += "\t" + req.request
-                if req.request is "get device"
+                text += "\t" + req.command
+                if req.command is "get device"
                   text += " <device name | device id>"
                 text += "\n"
             text += "\nRule commands: \n"
             for req in @requests
               if req.type is "rule"
-                text += "\t" + req.request + "\n"
+                text += "\t" + req.command + "\n"
+            text += "\nAny command following rule action syntax\nExamples:\n\t'turn on <device>'\n\t'set temp of <device> to 21'\n"
             return text
         },
         {
-          request: "execute", 
+          command: "execute",
+          type: "restricted"
           action: => 
-            env.logger.warn "'execute' request received; This is not allowed for security reasons" # It's a trap !!
+            env.logger.warn "command 'execute' received; This is not allowed for security reasons" # It's a trap !!
             return null
           protected: false
           response: (msg) ->
-            text = "request 'execute' received; This is not allowed for security reasons"
+            text = "command 'execute' received; This is not allowed for security reasons"
             return text
         },
         {
-          request: "list devices"
+          command: "list devices"
           type: "base"
           action: -> return null
           protected: true
@@ -312,11 +389,11 @@ module.exports = (env) ->
             devices = TelegramPlugin.getDevices()
             text = 'Devices :\n'
             for dev in devices
-              text += '\tName: ' + dev.name + "\tID: " + dev.id + "\n\n"
+              text += '\tName: ' + dev.name + "\nID: " + dev.id + "\n\n"
             return text
         },
         {
-          request: "get device"
+          command: "get device"
           type: "base"
           action: -> return null
           protected: true
@@ -325,26 +402,26 @@ module.exports = (env) ->
             devices = TelegramPlugin.getDevices()
             for dev in devices
               if ( obj[1].substring(1) == dev.id.toLowerCase() ) or ( obj[1].substring(1) == dev.name.toLowerCase() )
-                text = 'Name: ' + dev.name + " \tID: " + dev.id + " \tType: " +  dev.constructor.name + "\n"
+                text = 'Name: ' + dev.name + "\nID: " + dev.id + "\nType: " +  dev.constructor.name + "\n"
                 for name of dev.attributes
-                  text += '\t\t' + name.charAt(0).toUpperCase() + name.slice(1) + ": " + dev.getLastAttributeValue(name) + "\n\n"
+                  text += '\t\t' + name.charAt(0).toUpperCase() + name.slice(1) + ": " + dev.getLastAttributeValue(name) + "\n"
                 return text
             return "device not found"
         }]
-      
+      #@queue = []
       
       
     start: (@client) =>
       env.logger.info "Starting Telegram listener"
       @client.connect()
-      @enableRequests()
+      @enablecommands()
     
     stop: (@client) =>
       env.logger.info "Stopping Telegram listener"
       @authenticated = []
       @client.stop()
       
-    enableRequests: () =>
+    enablecommands: () =>
       @client.on('/*', (msg) =>
         env.logger.debug "Bot command received: ", msg
         client = new BotClient({token: TelegramPlugin.getToken()})
@@ -357,13 +434,13 @@ module.exports = (env) ->
       
       @client.on('text', (msg) =>
         return if msg.text.charAt(0) is '/'
-        env.logger.debug "Request '", msg.text, "' received, processing..."
+        env.logger.debug "command '", msg.text, "' received, processing..."
         instance = TelegramPlugin.getDeviceById(@id)
         sender = TelegramPlugin.getSender(msg.from.id.toString())
         
         # auth logic
         if !sender.isAdmin() # Lord Vader force-chokes you !!
-          env.logger.warn "auth_denied", sender.getName() + " is not authorized. Terminating request"
+          env.logger.warn "auth_denied", sender.getName() + " is not authorized. Terminating session."
           return
         
         date = new Date()
@@ -373,7 +450,7 @@ module.exports = (env) ->
         
         if instance.config.secret is msg.text or instance.config.disable2FA # Face Vader you must!
           @authenticated.push {id: sender.getId(), time: date.getTime()}
-          response.addContent(new ContentFactory("text", "Passcode correct, timeout set to " + instance.config.auth_timeout + " minutes. You can now issue requests"))
+          response.addContent(new ContentFactory("text", "Passcode correct, timeout set to " + instance.config.auth_timeout + " minutes. You can now issue commands"))
           client.sendMessage(response) unless instance.config.disable2FA
           env.logger.info sender.getName() + " successfully authenticated"
           return unless instance.config.disable2FA
@@ -386,16 +463,20 @@ module.exports = (env) ->
               sender.setAuthenticated(true)
         
         
-        request = msg.text.toLowerCase()
+        message = msg.text.toLowerCase()
         match = false
-        # command logic
+        # message logic
         if sender.isAuthenticated()  # May the force be with you
-          env.logger.info "Request '" + request + "' received from " + sender.getName()
+          env.logger.info "command '" + message + "' received from " + sender.getName()
           for req in @requests
-            if req.request.toLowerCase() is request.slice(0, req.request.length) # test request against base commands and 'receive "command"' predicate in ruleset
+            #if req.command.toLowerCase() is message.slice(0, req.command.length) # test message against base messages and 'receive "command"' predicate in ruleset
+            if (req.type is "rule" and req.command is message) or (req.type is "base" and req.command.toLowerCase() is message.slice(0, req.command.length)) # test message against base messages and 'receive "command"' predicate in ruleset
+              req.sender = sender
+              @emit('receivedRulePredicate', req.command, req.sender, req.id) if req.type is 'rule'
               req.action()
+    
               if req.type is "base" or instance.config.confirmRuleTrigger
-                response.addContent(new ContentFactory("text", req.response(request)))
+                response.addContent(new ContentFactory("text", req.response(message)))
                 client.sendMessage(response)
               match = true
               break
@@ -403,22 +484,23 @@ module.exports = (env) ->
           if !match
             for act in TelegramPlugin.getActionProviders()
               context = createDummyParseContext()
-              han = act.parseAction(request, context) # test if request is a valid action, e.g. "turn on switch-room1"
+              han = act.parseAction(message, context) # test if message is a valid action, e.g. "turn on switch-room1"
               if han?
                 han.actionHandler.executeAction()
                 if instance.config.confirmDeviceAction
-                  response.addContent(new ContentFactory("text", "Request '" + request + "' executed"))
+                  response.addContent(new ContentFactory("text", "command '" + message + "' executed"))
                   client.sendMessage(response)
                 match = true
                 break
-          
+
           if !match
-            response.addContent(new ContentFactory("text", "'" + request + "' is not a valid request"))
+            response.addContent(new ContentFactory("text", "'" + message + "' is not a valid message"))
             client.sendMessage(response)
             return
           return
+        
         else # Vader face you must
-          response.addContent(new ContentFactory("text", "Please provide the passcode first and reissue your request after"))
+          response.addContent(new ContentFactory("text", "Please provide the passcode first and reissue your command after"))
           client.sendMessage(response)
           return
       )
@@ -431,14 +513,17 @@ module.exports = (env) ->
     requestAdd: (req) =>
       if !@requestIsRegistered(req)
         obj = {
-          request: req.getCommand()
-          action: (msg) => req.emit('change', 'event')
+          id: req.ruleId
+          command: req.getCommand()
+          action: () => req.emit('change', 'event')
           protected: true
           type: "rule"
-          response: (msg) => return "Rule condition '" + obj.request + "' triggered"
+          sender: null
+          #response: (msg) => return "Rule condition '" + obj.request + "' triggered by " + obj.user # msg variable is unneccesary
+          response: () => return "Rule condition '" + obj.request + "' triggered by " + obj.sender.getName()
         }
         @requests.push obj
-        env.logger.info "Listener enabled ruleset command: '", obj.request, "'"
+        env.logger.info "Listener enabled ruleset command: '", obj.command, "'"
           
     requestChange: (req) =>
       @requestDelete(req)
@@ -448,7 +533,7 @@ module.exports = (env) ->
       i = -1 # additional iterator needed as array.indexOf(elem) does not work on array of objects
       for obj in @requests
         i++
-        if obj.request is req.getCommand()
+        if obj.command is req.getCommand()
           @requests.splice(i,1)
           break
       env.logger.info "Listener disabled ruleset command: '", req.getCommand(), "' "
@@ -456,7 +541,7 @@ module.exports = (env) ->
     requestIsRegistered: (req) =>
       reistered = false
       for obj in @requests
-        if obj.request is req.getCommand()
+        if obj.command is req.getCommand()
           registered = true
           break
       return registered

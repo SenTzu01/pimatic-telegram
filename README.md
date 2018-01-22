@@ -16,10 +16,11 @@ Pimatic plugin to provide bi-directional integration with Telegram, the free mes
 - Allowed file formats depend on Telegram supported formats, .mp3 (audio), .mp4, .avi (video), .jpg and .png (photo) have been validated (Max. allowed file size for media and doc types is 50MB, set by Telegram.org)
 
 ### Rule syntax and examples: 
-<b>send < text | video | audio | photo | doc | gps > telegram to [ recipient1 recipient2 ... recipientn ] < "text with $variables"  | "/local/path/with/$variables/to/file" | "$latitude;$longitude" ></b><br/>
+<b>send < text | video | audio | photo | doc | gps > telegram to [sender | recipient1 recipient2 ... recipientn ] < "text with $variables"  | "/local/path/with/$variables/to/file" | "$latitude;$longitude" ></b><br/>
 and / or:<br/>
 <b>telegram received "user-defined-keyword"</b><br/>
 
+- send text telegram to sender "reply only to user having send request" <i>Can only be used in combination with "telegram received... rule predicate"</i>
 - send text telegram to "ALERT! Pimatic detected movement in room: $room while nobody is home! Is someone unexpectedly making you a cup of tea?"<br/>
 - send video telegram to Owner1 Owner2 "/home/pi/front_door_camera.mp4"<br/>
 - when it is 08:00 and $phone-child.location is not "School" send gps telegram to Parent1 Parent2 "$phone-child.latitude;$phone-child.longitude"<br/>
@@ -147,7 +148,6 @@ Alternatively add the device directly to the Devices section your config.json:
 
 ### Known issues:
 
-- Since version 1.1.12 Rules according to the previous format (send telegram [recipient1 ...] "message") are NO LONGER supported. When upgrading, change your rules to the new format according to this manual (see rule syntax earlier)
 - "execute" cannot be used as a keyword, to prevent vulnerability exploitation. This is a security concern and will not likely be changed in the near future
 
 ### FAQ
