@@ -75,9 +75,7 @@ module.exports = (env) ->
       if device instanceof TelegramReceiverDevice
         @emit 'changedTelegramReceiverDevice', device
         for rule in @framework.ruleManager.getRules()
-          for predicate in rule.predicates
-            if predicate.handler instanceof TelegramPredicateHandler
-                @registerCmd(predicate.handler)
+          @_evaluateRuleEvent(rule)
     
     evaluateStringExpression: (value) ->
       return @framework.variableManager.evaluateStringExpression(value)
@@ -100,6 +98,15 @@ module.exports = (env) ->
     getConfig: () =>
       return @config
     
+    updateRuleByString: (id, {name, ruleString, active, logging}) =>
+      return @framework.ruleManager.updateRuleByString(id, {name, ruleString, active, logging})
+
+    executeAction: (actionString, simulate, logging) =>
+      return @framework.ruleManager.executeAction(actionString, simulate, logging)
+      
+    getRuleById: (id) =>
+      return @framework.ruleManager.getRuleById(id)
+
     getDeviceById: (id) =>
       return @framework.deviceManager.getDeviceById(id)
       
@@ -130,9 +137,10 @@ module.exports = (env) ->
       match = null
       nextInput = null
       recCommand = null
-
-      setCommand = (m, tokens) => recCommand = tokens
-
+      recArgs = null
+      
+      setCommand = (m, tokens) => [recCommand, recArgs...] = tokens.split(' ')
+      
       m = M(input, context)
         .match('telegram received ')
         .matchString(setCommand)
@@ -147,12 +155,12 @@ module.exports = (env) ->
         return {
           token: match
           nextInput: input.substring(match.length)
-          predicateHandler: new TelegramPredicateHandler(@framework, recCommand)
+          predicateHandler: new TelegramPredicateHandler(@framework, recCommand, recArgs)
         }
       else return null
 
   class TelegramPredicateHandler extends env.predicates.PredicateHandler
-    constructor: (framework, @command) ->
+    constructor: (framework, @command, @args) ->
       @ruleId = null
       super()
 
@@ -163,6 +171,8 @@ module.exports = (env) ->
     getValue: -> Promise.resolve false
     getType: -> 'event'
     getCommand: -> @command
+    getArgs: -> @args
+    getRuleId: -> @ruleId
     
     setRuleId: (id) -> 
       @ruleId = id
@@ -281,13 +291,16 @@ module.exports = (env) ->
       @_state = lastState?.state?.value or @config.stateStartup
       
       super()
-      
+
+      @listener = new Listener(@id)
+
       TelegramPlugin.on('eventTelegramPredicate', (rule) =>
         rule.predicates.map( (predicate) =>
           if predicate.handler instanceof TelegramPredicateHandler
+            predicate.handler.setRuleId(rule.id)
+            @listener.requestAdd(predicate.handler)
             rule.actions.map( (action) =>
               if action.handler instanceof TelegramActionHandler
-                predicate.handler.setRuleId(rule.id)
                 action.handler.mapCommand(rule.id, predicate.handler.command)
                 env.logger.debug 'TelegramReceiverDevice::constructor => Mapping Telegram predicate command: ' + predicate.handler.command + ' to TelegramActionHandler for rule.id: ' + rule.id
                 return
@@ -296,10 +309,6 @@ module.exports = (env) ->
         
       )
       
-      @listener = new Listener(@id)
-      TelegramPlugin.on('cmdRegistered', (cmd) =>
-        @listener.requestAdd(cmd)
-      )
       TelegramPlugin.on('cmdDeregistered', (cmd) =>
         @listener.requestDelete(cmd)
       )
@@ -469,12 +478,26 @@ module.exports = (env) ->
         if sender.isAuthenticated()  # May the force be with you
           env.logger.info "command '" + message + "' received from " + sender.getName()
           for req in @requests
-            #if req.command.toLowerCase() is message.slice(0, req.command.length) # test message against base messages and 'receive "command"' predicate in ruleset
-            if (req.type is "rule" and req.command is message) or (req.type is "base" and req.command.toLowerCase() is message.slice(0, req.command.length)) # test message against base messages and 'receive "command"' predicate in ruleset
-              req.sender = sender
-              @emit('receivedRulePredicate', req.command, req.sender, req.id) if req.type is 'rule'
-              req.action()
-    
+            if (req.type is "rule" or req.type is "base") and req.command.toLowerCase() is message.slice(0, req.command.length)
+              if req.type is "rule"
+                @emit('receivedRulePredicate', req.command, sender, req.id)
+                if req.args?
+                  [command, args...] = message.split(' ')
+                  if req.args.length is args.length
+                    rule = req.getRule()
+                    rule.actions.map( (action) =>
+                      actionString = action.token
+                      for arg, i in args
+                        if req.args[i]?
+                          actionString = actionString.replace(new RegExp('\\\\\\' + req.args[i], 'g'), arg) # replace each arg in req.args with corresponding arg in args
+                      TelegramPlugin.executeAction(actionString)
+                    )
+                  else
+                    response.addContent(new ContentFactory("text", "'" + command + "' takes " + req.args.length + " arguments."))
+                    client.sendMessage(response)
+                else
+                  req.action()
+
               if req.type is "base" or instance.config.confirmRuleTrigger
                 response.addContent(new ContentFactory("text", req.response(message)))
                 client.sendMessage(response)
@@ -513,13 +536,14 @@ module.exports = (env) ->
     requestAdd: (req) =>
       if !@requestIsRegistered(req)
         obj = {
-          id: req.ruleId
+          ruleId: req.getRuleId()
+          getRule: () => return TelegramPlugin.getRuleById(obj.ruleId)
           command: req.getCommand()
+          args: req.getArgs()
           action: () => req.emit('change', 'event')
           protected: true
           type: "rule"
           sender: null
-          #response: (msg) => return "Rule condition '" + obj.request + "' triggered by " + obj.user # msg variable is unneccesary
           response: () => return "Rule condition '" + obj.request + "' triggered by " + obj.sender.getName()
         }
         @requests.push obj
@@ -539,7 +563,7 @@ module.exports = (env) ->
       env.logger.info "Listener disabled ruleset command: '", req.getCommand(), "' "
       
     requestIsRegistered: (req) =>
-      reistered = false
+      registered = false
       for obj in @requests
         if obj.command is req.getCommand()
           registered = true
