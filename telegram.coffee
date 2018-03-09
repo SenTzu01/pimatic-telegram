@@ -488,7 +488,7 @@ module.exports = (env) ->
                   [command, args...] = message.split(' ')
                   rule = req.getRule()
                   ruleString = rule.string
-                  vars = ruleString.match(/\\\$\w+/g)
+                  vars = ruleString.match(/\\\$\w+/g) or []
                   
                   if vars.length <= args.length
                     for i in [0..vars.length]
@@ -500,7 +500,7 @@ module.exports = (env) ->
                     req.action()
                     TelegramPlugin.updateRuleByString(rule.id, {ruleString: rule.string})
                   else
-                    response.addContent(new ContentFactory("text", "'" + actionString + "' takes a minimum of " + vars.length + " arguments."))
+                    response.addContent(new ContentFactory("text", "'" + rule.id + "' action takes a minimum of " + vars.length + " arguments."))
                     client.sendMessage(response)
                 else
                   @emit('receivedRulePredicate', req.command, sender, req.id)
