@@ -36,7 +36,7 @@ and / or:<br/>
 <b>get device device_name | device_id</b> - get details on a device</br>
 <b>set temp of Thermostat to 15</b> - execute a device action using rule action syntax</br>
 <b>user defined keyword</b> - Triggers a defined rule with the "telegram received 'user-defined-keyword'" condition</br>
-<b>user defined keyword <var1> <varN></b> - Triggers a defined rule with the "telegram received 'user-defined-keyword' with arguments" condition</br>
+<b>user defined keyword \<var1\> \<varN\></b> - Triggers a defined rule with the "telegram received 'user-defined-keyword' with arguments" condition</br>
 
 
 Preinstallation Requirements
