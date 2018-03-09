@@ -288,7 +288,6 @@ module.exports = (env) ->
         @_removeListener(listener)
       )
       
-      
   class TelegramReceiverDevice extends env.devices.SwitchActuator
         
     constructor: (@config, lastState) ->
