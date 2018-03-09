@@ -6,6 +6,7 @@ Pimatic plugin to provide bi-directional integration with Telegram, the free mes
 ### Features
 - Send messages from Pimatic to your (mobile) device equipped with the Telegram messaging client
 - Send device and rule requests to Pimatic from your Telegram client
+- Rule requests may contain variables to be used in rule actions
 - Support for Text / Video / Audio / Image / GPS Location Message types (gps location shows up as a map in the client)
 - Support for sending messages to all enabled or multiple individual recipients
 - Enable / disable recipients for receiving messages and / or sending requests from a messaging client
@@ -25,6 +26,7 @@ and / or:<br/>
 - send video telegram to Owner1 Owner2 "/home/pi/front_door_camera.mp4"<br/>
 - when it is 08:00 and $phone-child.location is not "School" send gps telegram to Parent1 Parent2 "$phone-child.latitude;$phone-child.longitude"<br/>
 - when telegram received "turn off heating" then set temp of Thermostat to 15<br/>
+- when telegram received "myscript" with arguments then execute "myscript \\$var1 \\$var2"<br/>
 
 <i>If you do not provide recipients, a message will be sent to all enabled recipients</i><br>
  
@@ -33,7 +35,8 @@ and / or:<br/>
 <b>list devices</b> - Summary list of all devices</br>
 <b>get device device_name | device_id</b> - get details on a device</br>
 <b>set temp of Thermostat to 15</b> - execute a device action using rule action syntax</br>
-<b>user defined keyword</b> - Triggers a defined rule with the "telegram received "user-defined-keyword" condition</br>
+<b>user defined keyword</b> - Triggers a defined rule with the "telegram received 'user-defined-keyword'" condition</br>
+<b>user defined keyword \<var1\> \<varN\></b> - Triggers a defined rule with the "telegram received 'user-defined-keyword' with arguments" condition</br>
 
 
 Preinstallation Requirements
