@@ -26,7 +26,7 @@ and / or:<br/>
 - send video telegram to Owner1 Owner2 "/home/pi/front_door_camera.mp4"<br/>
 - when it is 08:00 and $phone-child.location is not "School" send gps telegram to Parent1 Parent2 "$phone-child.latitude;$phone-child.longitude"<br/>
 - when telegram received "turn off heating" then set temp of Thermostat to 15<br/>
-- when telegram received "myscript" with arguments then execute "myscript \$var1 \$var2"<br/>
+- when telegram received "myscript" with arguments then execute "myscript \\$var1 \\$var2"<br/>
 
 <i>If you do not provide recipients, a message will be sent to all enabled recipients</i><br>
  
