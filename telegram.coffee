@@ -319,8 +319,6 @@ module.exports = (env) ->
         @listener.requestDelete(cmd)
       )
       
-      
-      
       @startListener() if @_state
           
     changeStateTo: (state) ->
@@ -559,7 +557,7 @@ module.exports = (env) ->
           response: () => return "Rule condition '" + obj.request + "' triggered by " + obj.sender.getName()
         }
         @requests.push obj
-        env.logger.info "Listener enabled ruleset command: '", obj.command, "'"
+        env.logger.debug "Listener enabled ruleset command: '", obj.command, "'"
           
     requestChange: (req) =>
       @requestDelete(req)
@@ -571,7 +569,7 @@ module.exports = (env) ->
         i++
         if obj.command is req.getCommand()
           @requests.splice(i,1)
-          env.logger.info "Listener disabled ruleset command: '", req.getCommand(), "' "
+          env.logger.debug "Listener disabled ruleset command: '", req.getCommand(), "' "
           break
 
       
