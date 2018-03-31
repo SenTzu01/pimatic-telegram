@@ -1,7 +1,7 @@
 {
   "name": "pimatic-telegram",
   "description": "Plugin to send notifications and execute commands using the Telegram messaging platform",
-  "author": "Danny Wigmans",
+  "author": "Danny Wigmans (SenTzu01)",
   "license": "GPL-2.0",
   "main": "telegram.coffee",
   "files": [
