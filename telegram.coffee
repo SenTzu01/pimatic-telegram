@@ -655,8 +655,8 @@ module.exports = (env) ->
       )
     
     sendMessageParts: (message, recipient, log) =>
-      parts = message.match(/[\s\S]{1,2048}/g)
-      return parts.map( (part) => @processResult(@client.sendMessage(recipient.getId(), part), part, recipient.getName(), log) )
+      parts = message.match(/[\s\S]{1,4096}/g)
+      return parts.map( (part) => @processResult(@client.sendMessage(recipient.getId(), part, {parseMode: 'HTML'}), part, recipient.getName(), log) )
       
   class VideoMessage extends Message
     constructor: (options) ->
@@ -777,7 +777,12 @@ module.exports = (env) ->
       @base = commons.base @, "TextContent"
       
     get: () ->
-      super()
+      super().then( (message) =>
+        if message.length > 4096
+          @base.rejectWithErrorString Promise.reject, __("Message exceeds 4096 characters.")
+        else
+          Promise.resolve message
+      )
       
   class MediaContent extends Content
     constructor: (input) ->
