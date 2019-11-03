@@ -7,6 +7,8 @@ module.exports = (env) ->
   cassert = env.require 'cassert'
   events = require 'events'
   M = env.matcher
+  _ = env.require 'lodash'
+  assert = env.require 'cassert'
   
   class Telegram extends env.plugins.Plugin
     
@@ -45,8 +47,7 @@ module.exports = (env) ->
       
       @framework.ruleManager.addPredicateProvider(new TelegramPredicateProvider(@framework, @config))
       @framework.ruleManager.addActionProvider(new TelegramActionProvider(@framework, @config))
-      
-
+      @framework.ruleManager.addActionProvider(new TelegramReloadActionProvider(@framework, @config))
       
       deviceConfigDef = require("./telegram-device-config-schema")
       @framework.deviceManager.registerDeviceClass("TelegramReceiverDevice", {
@@ -288,6 +289,60 @@ module.exports = (env) ->
         @_removeListener(listener)
       )
       
+  class TelegramReloadActionProvider extends env.actions.ActionProvider
+    
+    constructor: (@framework, @config) ->
+      
+    parseAction: (input, context) =>
+      selectorDevices = _(@framework.deviceManager.devices).values().filter(
+        (device) => device.config.class is 'TelegramReceiverDevice'
+      ).value()
+      
+      device = null
+      match = null
+
+      
+      # Try to match the input string with: reload ->
+      m = M(input, context).match(['reload '])
+      m.matchDevice( selectorDevices, (m, d) ->
+        # Already had a match with another device?
+        if device? and device.id isnt d.id
+          context?.addError(""""#{input.trim()}" is ambiguous.""")
+          return
+        device = d
+        match = m.getFullMatch()
+      )
+      
+      if match?
+        assert device?
+        return {
+          token: match
+          nextInput: input.substring(match.length)
+          actionHandler: new TelegramReloadActionHandler(@framework, device)
+        }
+      else
+        return null
+        
+  class TelegramReloadActionHandler extends env.actions.ActionHandler
+  
+    constructor: (@framework, @device) ->
+      @_base = commons.base @
+      super()
+
+    setup: ->
+      @dependOnDevice(@device)
+      super()
+
+    executeAction: (simulate) =>
+      @reloadDevice(@device, simulate)
+
+    reloadDevice: (device, simulate) =>
+      if simulate
+        return Promise.resolve(__("Would reload device: '%s'"), device.name)
+      else
+        device.reloadListener()
+        return Promise.resolve(__("%s was reloaded", device.name))
+      
   class TelegramReceiverDevice extends env.devices.SwitchActuator
         
     constructor: (@config, lastState) ->
@@ -319,7 +374,11 @@ module.exports = (env) ->
       )
       
       @startListener() if @_state
-          
+    
+    reloadListener: () =>
+      @stopListener()
+      @startListener()
+      
     changeStateTo: (state) ->
       pending = []
       if @_state is state then return Promise.resolve true
@@ -860,5 +919,6 @@ module.exports = (env) ->
       return new types[type] args
       
   module.exports.TelegramActionHandler = TelegramActionHandler
+  module.exports.TelegramReloadActionHandler = TelegramReloadActionHandler
   TelegramPlugin = new Telegram()
   return TelegramPlugin

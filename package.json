@@ -12,7 +12,7 @@
     "LICENSE",
     "INSTALL"
   ],
-  "version": "1.1.11",
+  "version": "1.1.12",
   "homepage": "https://github.com/SenTzu01/pimatic-telegram",
   "repository": {
     "type": "git",
@@ -21,7 +21,7 @@
   "configSchema": "telegram-config-schema.coffee",
   "dependencies": {
     "pimatic-plugin-commons": "^0.8.7",
-    "telebot": "git+https://github.com/SenTzu01/telebot.git"
+    "telebot": "git+https://github.com/mullwar/telebot.git"
   },
   "peerDependencies": {
     "pimatic": ">=0.9.*"
@@ -32,12 +32,6 @@
   },
   "bugs": {
     "url": "https://github.com/SenTzu01/pimatic-telegram/issues"
-  },
-  "devDependencies": {
-    "babel-core": "^6.26.0",
-    "babel-preset-es2015": "^6.24.1",
-    "gulp": "^3.9.1",
-    "gulp-babel": "^7.0.0"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
