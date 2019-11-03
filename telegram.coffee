@@ -372,13 +372,13 @@ module.exports = (env) ->
               if req.type is "base"
                 text += "\t" + req.command
                 if req.command is "get device"
-                  text += " <device name | device id>"
+                  text += " device_name | device_id"
                 text += "\n"
             text += "\nRule commands: \n"
             for req in @requests
               if req.type is "rule"
                 text += "\t" + req.command + "\n"
-            text += "\nAny command following rule action syntax\nExamples:\n\t'turn on <device>'\n\t'set temp of <device> to 21'\n"
+            text += "\nAny command following rule action syntax\nExamples:\n\t'turn on device'\n\t'set temp of device to 21'\n"
             return text
         },
         {
