@@ -566,7 +566,8 @@ module.exports = (env) ->
                   req.action()
 
               if req.type is "base" or instance.config.confirmRuleTrigger
-                response.addContent(new ContentFactory("text", req.response(message)))
+                req.sender = sender
+                response.addContent(new ContentFactory("text", req.response())) # message
                 client.sendMessage(response)
               match = true
               break
@@ -612,7 +613,7 @@ module.exports = (env) ->
           protected: true
           type: "rule"
           sender: null
-          response: () => return "Rule condition '" + obj.request + "' triggered by " + obj.sender.getName()
+          response: () => return "Rule condition '" + obj.command + "' triggered by " + obj.sender.getName()
         }
         @requests.push obj
         env.logger.debug "Listener enabled ruleset command: '", obj.command, "'"
