@@ -512,7 +512,8 @@ module.exports = (env) ->
         
         # auth logic
         if !sender.isAdmin() # Lord Vader force-chokes you !!
-          env.logger.warn "auth_denied", sender.getName() + " is not authorized. Terminating session."
+          msg.reply("You are not authorized on this system. Details have been logged!")
+          env.logger.warn "Incoming request from user denied; user not authorized. Details below:\nName:\t\t" + msg.from.first_name + "\nchatID:\t\t" + msg.from.id + "\nusername:\t" + msg.from.username + "\nResult:\tSession terminated"
           return
         
         date = new Date()
