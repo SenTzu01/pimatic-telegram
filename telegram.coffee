@@ -763,7 +763,7 @@ module.exports = (env) ->
       
     send: (@client, log) =>
       @content.get().then( (file) =>
-        return @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), file), file, r.getName(), log))
+        return @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), {source: file}), file, r.getName(), log))
       ).catch( (err) =>
         @base.rejectWithErrorString Promise.reject, "Unable to send Video file"
       )
@@ -776,7 +776,7 @@ module.exports = (env) ->
     send: (@client, log) =>
       @content.get()
         .then( (file) =>
-          return @recipients.map( (r) => @processResult(@client.sendAudio(r.getId(), file), file, r.getName(), log))
+          return @recipients.map( (r) => @processResult(@client.sendAudio(r.getId(), {source: file}), file, r.getName(), log))
         ).catch((err) =>
           @base.rejectWithErrorString Promise.reject, "Unable to send Audio file"
         )
@@ -789,7 +789,7 @@ module.exports = (env) ->
     send: (@client, log) =>
       @content.get()
         .then( (file) =>
-            return @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), file), r.getName(), log))
+            return @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), {source: file} ), r.getName(), log))
         ).catch( (err) =>
             @base.rejectWithErrorString Promise.reject, "Unable to send Image file"
         )
@@ -802,7 +802,7 @@ module.exports = (env) ->
     send: (@client, log) =>
       @content.get()
         .then( (file) =>
-            return @recipients.map( (r) => @processResult(@client.sendDocument(r.getId(), file), r.getName(), log))
+            return @recipients.map( (r) => @processResult(@client.sendDocument(r.getId(), { source: file} ), r.getName(), log))
         ).catch( (err) =>
             @base.rejectWithErrorString Promise.reject, "Unable to send file"
         )
@@ -814,7 +814,7 @@ module.exports = (env) ->
       
     send: (@client) =>
       @content.get().then( (gps) =>
-        return @recipients.map( (r) => @processResult(@client.sendLocation(r.getId(), [gps[0], gps[1]]), gps, r.getName()))
+        return @recipients.map( (r) => @processResult(@client.sendLocation(r.getId(), gps[0], gps[1]), gps, r.getName()))
       ).catch( (err) =>
           @base.rejectWithErrorString Promise.reject, "Unable to send Location coordinates"
       )
