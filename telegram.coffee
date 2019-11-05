@@ -488,7 +488,6 @@ module.exports = (env) ->
       @client.startPolling(options.polling.timeout, options.polling.limit)
       @enablecommands()
       @client.launch()
-      console.log(@client)
       
     stop: (@client) =>
       env.logger.info "Stopping Telegram listener"
@@ -509,7 +508,6 @@ module.exports = (env) ->
       )
       ###
       @client.on('text', (msg) =>
-        console.log(msg.message)
         return if msg.message.text.charAt(0) is '/'
         env.logger.debug "command '", msg.message.text, "' received, processing..."
         instance = TelegramPlugin.getDeviceById(@id)
@@ -738,7 +736,6 @@ module.exports = (env) ->
       @base = commons.base @, "TextMessage"
       
     send: (@client, log) =>
-      console.log(@)
       @content.get().then( (message) =>
         @recipients.map( (r) =>
           Promise.all(@sendMessageParts(message, r, log)).then( (result) =>
