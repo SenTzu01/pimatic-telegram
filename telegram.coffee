@@ -460,7 +460,7 @@ module.exports = (env) ->
             devices = TelegramPlugin.getDevices()
             text = 'Devices :\n'
             for dev in devices
-              text += '\tName: ' + dev.name + "\nID: " + dev.id + "\n\n"
+              text += '\tName: ' + dev.name + "\n\tID: " + dev.id + "\n\n"
             return text
         },
         {
