@@ -5,6 +5,7 @@ Pimatic plugin to provide bi-directional integration with Telegram, the free mes
 
 ### Features
 - Send messages from Pimatic to your (mobile) device equipped with the Telegram messaging client
+- Limited HTML markup in messages supported such as <b> <i> and <a href=...> tags as per Telegram API
 - Send device and rule requests to Pimatic from your Telegram client
 - Rule requests may contain variables to be used in rule actions
 - Support for Text / Video / Audio / Image / GPS Location Message types (gps location shows up as a map in the client)
@@ -22,7 +23,7 @@ and / or:<br/>
 <b>telegram received "user-defined-keyword"</b><br/>
 
 - send text telegram to sender "reply only to user having send request" <i>Can only be used in combination with "telegram received... rule predicate"</i>
-- send text telegram to "ALERT! Pimatic detected movement in room: $room while nobody is home! Is someone unexpectedly making you a cup of tea?"<br/>
+- send text telegram to "\<b\>ALERT!\</b\> Pimatic detected movement in room: \<i\>$room\</i\> while nobody is home! Is someone unexpectedly making you a cup of tea?"<br/>
 - send video telegram to Owner1 Owner2 "/home/pi/front_door_camera.mp4"<br/>
 - when it is 08:00 and $phone-child.location is not "School" send gps telegram to Parent1 Parent2 "$phone-child.latitude;$phone-child.longitude"<br/>
 - when telegram received "turn off heating" then set temp of Thermostat to 15<br/>
