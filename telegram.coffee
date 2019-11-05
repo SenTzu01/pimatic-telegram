@@ -567,7 +567,7 @@ module.exports = (env) ->
 
               if req.type is "base" or instance.config.confirmRuleTrigger
                 req.sender = sender
-                response.addContent(new ContentFactory("text", req.response())) # message
+                response.addContent(new ContentFactory("text", req.response(message))) # message
                 client.sendMessage(response)
               match = true
               break
