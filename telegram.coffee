@@ -380,8 +380,9 @@ module.exports = (env) ->
       @startListener() if @_state
     
     reloadListener: () =>
-      @stopListener()
-      @startListener()
+      @stopListener().then( () =>
+        @startListener()
+      )
       
     changeStateTo: (state) ->
       pending = []
@@ -485,14 +486,15 @@ module.exports = (env) ->
       
     start: (@client, options) =>
       env.logger.info "Starting Telegram listener"
-      @client.startPolling(options.polling.timeout, options.polling.limit)
       @enablecommands()
-      @client.launch()
+      @client.startPolling(options.polling.timeout, options.polling.limit)
       
     stop: (@client) =>
       env.logger.info "Stopping Telegram listener"
       @authenticated = []
-      @client.stop()
+      @client.stop( () =>
+        return true
+      )
       
     enablecommands: () =>
       ###
