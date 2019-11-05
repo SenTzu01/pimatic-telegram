@@ -634,7 +634,6 @@ module.exports = (env) ->
           @requests.splice(i,1)
           env.logger.debug "Listener disabled ruleset command: '", req.getCommand(), "' "
           break
-
       
     requestIsRegistered: (req) =>
       registered = false
