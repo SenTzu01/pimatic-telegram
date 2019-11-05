@@ -28,20 +28,20 @@ module.exports = {
         description: "Should the receiver send confirmation upon executing device actions?"
         type: "boolean"
         default: true
-      interval:
-        description: "How often to check for new requests (in ms)"
-        type: "number"
-        default: 1000
       timeout:
-        description: "Message polling timout (0 - short polling)"
+        description: "Message polling timout in seconds (0 - short polling)"
         type: "number"
-        default: 0
+        default: 30
       limit:
         description: "Number of new requests to be retrieved"
         type: "number"
-        default: 10
+        default: 100
+      interval:
+        description: "DEPRECATED - How often to check for new requests (in ms)"
+        type: "number"
+        default: 1000
       retryTimeout:
-        description: "Reconnect timeout (in ms)"
+        description: "DEPRECATED - Reconnect timeout (in ms)"
         type: "number"
         default: 5000
   }

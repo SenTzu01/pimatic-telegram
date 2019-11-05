@@ -399,12 +399,8 @@ module.exports = (env) ->
     startListener: () =>
       @client = new BotClient({
         token: TelegramPlugin.getToken()
-        polling: {
-          interval: @config.interval
-          timeout: @config.timeout
-          limit: @config.limit
-          retryTimeout: @config.retryTimeout
-        }
+        timeout: @config.timeout
+        limit: @config.limit
       })
       @client.startListener(@listener)
      
@@ -487,8 +483,7 @@ module.exports = (env) ->
     start: (@client, options) =>
       env.logger.info "Starting Telegram listener"
       @enablecommands()
-      @client.startPolling(options.polling.timeout, options.polling.limit)
-      
+      @client.startPolling(options.timeout, options.limit)
     stop: (@client) =>
       env.logger.info "Stopping Telegram listener"
       @authenticated = []
@@ -651,11 +646,9 @@ module.exports = (env) ->
       @base = commons.base @, "BotClient"
       @client = new TelegrafBot(@_options.token, {
         telegram: {
-          agent: null,
           webhookReply: false
         }
       })
-    
     
     stopListener: (listener) =>
       listener.stop(@client)
@@ -683,10 +676,7 @@ module.exports = (env) ->
       options.buildInPlugins = []
       @base = commons.base @, "MessageClient"
       @client = new TelegrafClient(@_options.token, {
-        telegram: {
-          agent: null,
-          webhookReply: false
-        }
+        webhookReply: false
       })
     
     sendMessage: (message, log) =>
