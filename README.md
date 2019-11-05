@@ -5,7 +5,7 @@ Pimatic plugin to provide bi-directional integration with Telegram, the free mes
 
 ### Features
 - Send messages from Pimatic to your (mobile) device equipped with the Telegram messaging client
-- Limited HTML markup in messages supported such as <b> <i> and <a href=...> tags as per Telegram API
+- Limited HTML markup in messages supported such as \<b\> \<i\> and \<a href=...\> tags as per Telegram API
 - Send device and rule requests to Pimatic from your Telegram client
 - Rule requests may contain variables to be used in rule actions
 - Support for Text / Video / Audio / Image / GPS Location Message types (gps location shows up as a map in the client)
