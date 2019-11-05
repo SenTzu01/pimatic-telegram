@@ -3,7 +3,6 @@ module.exports = (env) ->
   Promise = env.require 'bluebird'
   fs = require('fs')
   commons = require('pimatic-plugin-commons')(env)
-  TelegramBotClient = require('telebot');
   cassert = env.require 'cassert'
   events = require 'events'
   M = env.matcher
