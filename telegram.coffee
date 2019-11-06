@@ -492,18 +492,6 @@ module.exports = (env) ->
       )
       
     enablecommands: () =>
-      ###
-      @client.command('*', (msg) =>
-        console.log('command received')
-        env.logger.debug "Bot command received: ", msg.message.text
-        client = new BotClient({token: TelegramPlugin.getToken()})
-        response = new MessageFactory("text")
-        response.addRecipient(TelegramPlugin.getSender(msg.from.id.toString()))
-        response.addContent(new Content('Bot commands (/<cmd>) are not implemented'))
-        client.sendMessage(response)
-        return true
-      )
-      ###
       @client.on('text', (msg) =>
         return if msg.message.text.charAt(0) is '/'
         env.logger.debug "command '", msg.message.text, "' received, processing..."
@@ -517,9 +505,6 @@ module.exports = (env) ->
           return
         
         date = new Date()
-        client = new BotClient({token: TelegramPlugin.getToken()})
-        response = new MessageFactory("text")
-        response.addRecipient(sender)
         
         if instance.config.secret is msg.message.text or instance.config.disable2FA # Face Vader you must!
           @authenticated.push {id: sender.getId(), time: date.getTime()}
@@ -656,19 +641,6 @@ module.exports = (env) ->
     
     startListener: (listener) =>
       listener.start(@client, @_options)
-    
-    sendMessage: (message, log) =>
-      return new Promise( (resolve, reject) =>
-        message.send(@client, log).then( (results) =>
-          Promise.some(results, results.length).then( (result) =>
-            resolve
-          ).catch(Promise.AggregateError, (err) =>
-            @base.rejectWithErrorString Promise.reject, "Message was NOT sent to all recipients"
-          )
-        ).catch( (err) =>
-          @base.error err
-        )
-      )
 
   class MessageClient
     
