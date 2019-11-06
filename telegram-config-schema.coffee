@@ -3,7 +3,7 @@ module.exports = {
   type: "object"
   properties:
     host:
-      description: "API Server address"
+      description: "DEPRECATED - API Server address"
       type: "string"
       default: "api.telegram.org"
     apiToken:
