@@ -68,37 +68,10 @@ Installation and Configuration:
 
 ### Obtain your chatID
 
-- With your Telegram client start a conversation with your bot (@MyAwesomePimaticBot)
-- send a message, doesn't matter what the content is
-- in your browser, type: https://api.telegram.org/bot784324329:EETRNJU3jQEGWQdjNv3llb4bnDSDREGuuuL/getUpdates (replace the string after bot with your own token)
-- in your browser you will see a JSON response similar to the below:
-````json
-{
-  "ok":true,
-  "result":
-  [{
-    "update_id":100,
-    "message":{
-      "message_id":12,
-      "from":
-      {
-        "id": "<this_is_the_number_you_need!>",
-        "first_name":"fname","username":"uname"
-      },
-      "chat":
-      {
-        "id":123456789,
-        "first_name":"fname",
-        "username":"uname",
-        "type":"private"
-      },
-      "date":1481753058,
-      "text":"Hello World!"
-    }
-  }]
-}
-````
-- Look for the number after "id", and save it
+- With your Telegram client start a conversation with the ID bot (@myidbot)
+- send /getid
+- The bot will respond with your ChatID, e.g. 315123987
+- Take note of this number
 - Repeat for each recipient you want to register in Pimatic
 
 ### Install the Plugin (required for using the send telegram functions)
