@@ -12,7 +12,7 @@
     "LICENSE",
     "INSTALL"
   ],
-  "version": "1.1.12",
+  "version": "1.1.13",
   "homepage": "https://github.com/SenTzu01/pimatic-telegram",
   "repository": {
     "type": "git",
@@ -21,7 +21,7 @@
   "configSchema": "telegram-config-schema.coffee",
   "dependencies": {
     "pimatic-plugin-commons": "^0.8.7",
-    "telebot": "git+https://github.com/mullwar/telebot.git"
+    "telegraf": "^3.33.3"
   },
   "peerDependencies": {
     "pimatic": ">=0.9.*"

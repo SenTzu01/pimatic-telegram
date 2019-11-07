@@ -3,12 +3,16 @@ module.exports = (env) ->
   Promise = env.require 'bluebird'
   fs = require('fs')
   commons = require('pimatic-plugin-commons')(env)
-  TelegramBotClient = require('telebot');
   cassert = env.require 'cassert'
   events = require 'events'
   M = env.matcher
   _ = env.require 'lodash'
   assert = env.require 'cassert'
+  
+  
+  # Telegraf implementation
+  TelegrafBot = require('telegraf')
+  TelegrafClient = require('telegraf/telegram')
   
   class Telegram extends env.plugins.Plugin
     
@@ -280,7 +284,7 @@ module.exports = (env) ->
       else
         env.logger.debug 'TelegramActionHandler::executeAction: => ruleId: ' + @ruleId + ', reply: ' + @reply + ', trigger: ' + @trigger + ', recipients: ' + @message.recipients + ', sending message'
         return Promise.reject '"send telegram to sender ..." action syntax can only be used in combination with "when telegram ... received" as rule predicate!' if @reply and not @trigger?
-        client = new BotClient({token: TelegramPlugin.getToken()})
+        client = new MessageClient({token: TelegramPlugin.getToken()})
         return client.sendMessage(@message, true)
         
     destroy: () ->
@@ -376,8 +380,9 @@ module.exports = (env) ->
       @startListener() if @_state
     
     reloadListener: () =>
-      @stopListener()
-      @startListener()
+      @stopListener().then( () =>
+        @startListener()
+      )
       
     changeStateTo: (state) ->
       pending = []
@@ -392,17 +397,11 @@ module.exports = (env) ->
       )
       
     startListener: () =>
-      
       @client = new BotClient({
         token: TelegramPlugin.getToken()
-        polling: {
-          interval: @config.interval
-          timeout: @config.timeout
-          limit: @config.limit
-          retryTimeout: @config.retryTimeout
-        }
+        timeout: @config.timeout
+        limit: @config.limit
       })
-      
       @client.startListener(@listener)
      
     stopListener: () =>
@@ -479,50 +478,39 @@ module.exports = (env) ->
                 return text
             return "device not found"
         }]
-      #@queue = []
       
       
-    start: (@client) =>
+    start: (@client, options) =>
       env.logger.info "Starting Telegram listener"
-      @client.connect()
       @enablecommands()
-    
+      @client.startPolling(options.timeout, options.limit)
     stop: (@client) =>
       env.logger.info "Stopping Telegram listener"
       @authenticated = []
-      @client.stop()
-      
-    enablecommands: () =>
-      @client.on('/*', (msg) =>
-        env.logger.debug "Bot command received: ", msg
-        client = new BotClient({token: TelegramPlugin.getToken()})
-        response = new MessageFactory("text")
-        response.addRecipient(TelegramPlugin.getSender(msg.from.id.toString()))
-        response.addContent(new Content('Bot commands (/<cmd>) are not implemented'))
-        client.sendMessage(response)
+      @client.stop( () =>
         return true
       )
       
+    enablecommands: () =>
       @client.on('text', (msg) =>
-        return if msg.text.charAt(0) is '/'
-        env.logger.debug "command '", msg.text, "' received, processing..."
+        return if msg.message.text.charAt(0) is '/'
+        env.logger.debug "command '", msg.message.text, "' received, processing..."
         instance = TelegramPlugin.getDeviceById(@id)
         sender = TelegramPlugin.getSender(msg.from.id.toString())
         
         # auth logic
         if !sender.isAdmin() # Lord Vader force-chokes you !!
-          env.logger.warn "auth_denied", sender.getName() + " is not authorized. Terminating session."
+          msg.reply("You are not authorized on this system. Details have been logged!")
+          env.logger.warn "Incoming request from user denied; user not authorized. Details below:\nName:\t\t" + msg.from.first_name + "\nchatID:\t\t" + msg.from.id + "\nusername:\t" + msg.from.username + "\nResult:\tSession terminated"
           return
         
         date = new Date()
-        client = new BotClient({token: TelegramPlugin.getToken()})
-        response = new MessageFactory("text")
-        response.addRecipient(sender)
         
-        if instance.config.secret is msg.text or instance.config.disable2FA # Face Vader you must!
+        if instance.config.secret is msg.message.text or instance.config.disable2FA # Face Vader you must!
           @authenticated.push {id: sender.getId(), time: date.getTime()}
-          response.addContent(new ContentFactory("text", "Passcode correct, timeout set to " + instance.config.auth_timeout + " minutes. You can now issue commands"))
-          client.sendMessage(response) unless instance.config.disable2FA
+
+          msg.reply("Passcode correct, timeout set to " + instance.config.auth_timeout + " minutes. You can now issue commands") unless instance.config.disable2FA
+          
           env.logger.info sender.getName() + " successfully authenticated"
           return unless instance.config.disable2FA
         
@@ -534,7 +522,7 @@ module.exports = (env) ->
               sender.setAuthenticated(true)
         
         
-        message = msg.text.toLowerCase()
+        message = msg.message.text.toLowerCase()
         match = false
         # message logic
         if sender.isAuthenticated()  # May the force be with you
@@ -559,16 +547,16 @@ module.exports = (env) ->
                     req.action()
                     TelegramPlugin.updateRuleByString(rule.id, {ruleString: rule.string})
                   else
-                    response.addContent(new ContentFactory("text", "'" + rule.id + "' action takes a minimum of " + vars.length + " arguments."))
-                    client.sendMessage(response)
+                    msg.reply("'" + rule.id + "' action takes a minimum of " + vars.length + " arguments.")
+                    
+                    
                 else
                   @emit('receivedRulePredicate', req.command, sender, req.id)
                   req.action()
 
               if req.type is "base" or instance.config.confirmRuleTrigger
                 req.sender = sender
-                response.addContent(new ContentFactory("text", req.response(message))) # message
-                client.sendMessage(response)
+                msg.reply(req.response(message))
               match = true
               break
           
@@ -579,20 +567,17 @@ module.exports = (env) ->
               if han?
                 han.actionHandler.executeAction()
                 if instance.config.confirmDeviceAction
-                  response.addContent(new ContentFactory("text", "command '" + message + "' executed"))
-                  client.sendMessage(response)
+                  msg.reply("command '" + message + "' executed")
                 match = true
                 break
 
           if !match
-            response.addContent(new ContentFactory("text", "'" + message + "' is not a valid message"))
-            client.sendMessage(response)
+            msg.reply("'" + message + "' is not a valid message")
             return
           return
         
         else # Vader face you must
-          response.addContent(new ContentFactory("text", "Please provide the passcode first and reissue your command after"))
-          client.sendMessage(response)
+          msg.reply("Please provide the passcode first and reissue your command after")
           return
       )
       
@@ -630,7 +615,6 @@ module.exports = (env) ->
           @requests.splice(i,1)
           env.logger.debug "Listener disabled ruleset command: '", req.getCommand(), "' "
           break
-
       
     requestIsRegistered: (req) =>
       registered = false
@@ -643,15 +627,30 @@ module.exports = (env) ->
   class BotClient
     
     constructor: (options) ->
+      @_options = options
       options.buildInPlugins = []
       @base = commons.base @, "BotClient"
-      @client = new TelegramBotClient(options)
+      @client = new TelegrafBot(@_options.token, {
+        telegram: {
+          webhookReply: false
+        }
+      })
     
     stopListener: (listener) =>
       listener.stop(@client)
     
     startListener: (listener) =>
-      listener.start(@client)
+      listener.start(@client, @_options)
+
+  class MessageClient
+    
+    constructor: (options) ->
+      @_options = options
+      options.buildInPlugins = []
+      @base = commons.base @, "MessageClient"
+      @client = new TelegrafClient(@_options.token, {
+        webhookReply: false
+      })
     
     sendMessage: (message, log) =>
       return new Promise( (resolve, reject) =>
@@ -716,7 +715,7 @@ module.exports = (env) ->
     
     sendMessageParts: (message, recipient, log) =>
       parts = message.match(/[\s\S]{1,4096}/g)
-      return parts.map( (part) => @processResult(@client.sendMessage(recipient.getId(), part, {parseMode: 'HTML'}), part, recipient.getName(), log) )
+      return parts.map( (part) => @processResult(@client.sendMessage(recipient.getId(), part, {parse_mode: 'HTML'}), part, recipient.getName(), log) )
       
   class VideoMessage extends Message
     constructor: (options) ->
@@ -725,7 +724,7 @@ module.exports = (env) ->
       
     send: (@client, log) =>
       @content.get().then( (file) =>
-        return @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), file), file, r.getName(), log))
+        return @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), {source: file}), file, r.getName(), log))
       ).catch( (err) =>
         @base.rejectWithErrorString Promise.reject, "Unable to send Video file"
       )
@@ -738,7 +737,7 @@ module.exports = (env) ->
     send: (@client, log) =>
       @content.get()
         .then( (file) =>
-          return @recipients.map( (r) => @processResult(@client.sendAudio(r.getId(), file), file, r.getName(), log))
+          return @recipients.map( (r) => @processResult(@client.sendAudio(r.getId(), {source: file}), file, r.getName(), log))
         ).catch((err) =>
           @base.rejectWithErrorString Promise.reject, "Unable to send Audio file"
         )
@@ -751,7 +750,7 @@ module.exports = (env) ->
     send: (@client, log) =>
       @content.get()
         .then( (file) =>
-            return @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), file), r.getName(), log))
+            return @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), {source: file} ), r.getName(), log))
         ).catch( (err) =>
             @base.rejectWithErrorString Promise.reject, "Unable to send Image file"
         )
@@ -764,7 +763,7 @@ module.exports = (env) ->
     send: (@client, log) =>
       @content.get()
         .then( (file) =>
-            return @recipients.map( (r) => @processResult(@client.sendDocument(r.getId(), file), r.getName(), log))
+            return @recipients.map( (r) => @processResult(@client.sendDocument(r.getId(), { source: file} ), r.getName(), log))
         ).catch( (err) =>
             @base.rejectWithErrorString Promise.reject, "Unable to send file"
         )
@@ -776,7 +775,7 @@ module.exports = (env) ->
       
     send: (@client) =>
       @content.get().then( (gps) =>
-        return @recipients.map( (r) => @processResult(@client.sendLocation(r.getId(), [gps[0], gps[1]]), gps, r.getName()))
+        return @recipients.map( (r) => @processResult(@client.sendLocation(r.getId(), gps[0], gps[1]), gps, r.getName()))
       ).catch( (err) =>
           @base.rejectWithErrorString Promise.reject, "Unable to send Location coordinates"
       )

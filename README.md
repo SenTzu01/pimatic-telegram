@@ -5,6 +5,7 @@ Pimatic plugin to provide bi-directional integration with Telegram, the free mes
 
 ### Features
 - Send messages from Pimatic to your (mobile) device equipped with the Telegram messaging client
+- Limited HTML markup in messages supported such as \<b\> \<i\> and \<a href=...\> tags as per Telegram API
 - Send device and rule requests to Pimatic from your Telegram client
 - Rule requests may contain variables to be used in rule actions
 - Support for Text / Video / Audio / Image / GPS Location Message types (gps location shows up as a map in the client)
@@ -17,16 +18,19 @@ Pimatic plugin to provide bi-directional integration with Telegram, the free mes
 - Allowed file formats depend on Telegram supported formats, .mp3 (audio), .mp4, .avi (video), .jpg and .png (photo) have been validated (Max. allowed file size for media and doc types is 50MB, set by Telegram.org)
 
 ### Rule syntax and examples: 
-<b>send < text | video | audio | photo | doc | gps > telegram to [sender | recipient1 recipient2 ... recipientn ] < "text with $variables"  | "/local/path/with/$variables/to/file" | "$latitude;$longitude" ></b><br/>
-and / or:<br/>
-<b>telegram received "user-defined-keyword"</b><br/>
 
-- send text telegram to sender "reply only to user having send request" <i>Can only be used in combination with "telegram received... rule predicate"</i>
-- send text telegram to "ALERT! Pimatic detected movement in room: $room while nobody is home! Is someone unexpectedly making you a cup of tea?"<br/>
-- send video telegram to Owner1 Owner2 "/home/pi/front_door_camera.mp4"<br/>
-- when it is 08:00 and $phone-child.location is not "School" send gps telegram to Parent1 Parent2 "$phone-child.latitude;$phone-child.longitude"<br/>
-- when telegram received "turn off heating" then set temp of Thermostat to 15<br/>
-- when telegram received "myscript" with arguments then execute "myscript \\$var1 \\$var2"<br/>
+Action syntax: <b>send < text | video | audio | photo | doc | gps > telegram to [sender* | recipient1 ... recipientn ] < "text with $variables"  | "/local/path/with/$variables/to/file" | "$latitude;$longitude" ></b><br/>
+
+Predicate syntax: <b>telegram received "user-defined-keyword" [with arguments]</b><br/>
+
+- <i>send text telegram to sender "reply only to user having send request"</i> -- *Can only be used in combination with "telegram received... rule predicate"<br/>
+- <i>send text telegram to "\<b\>ALERT!\</b\> Pimatic detected movement in room: \<i\>$room\</i\> while nobody is home! Is someone unexpectedly making you a cup of tea?"</i><br/>
+- <i>send video telegram to Owner1 Owner2 "/home/pi/front_door_camera.mp4"</i><br/>
+- when it is 08:00 and $phone-child.location is not "School" then <i>send gps telegram to Parent1 Parent2 "$phone-child.latitude;$phone-child.longitude"</i><br/>
+- when <i>telegram received "turn off heating"</i> then set temp of Thermostat to 15<br/>
+- when <i>telegram received "myscript" with arguments</i> then execute "myscript \\$var1 \\$var2"<br/>
+
+- when it is 23:00 then <i>reload \<TelegramReceiverDevice\></i>
 
 <i>If you do not provide recipients, a message will be sent to all enabled recipients</i><br>
  
@@ -35,8 +39,8 @@ and / or:<br/>
 <b>list devices</b> - Summary list of all devices</br>
 <b>get device device_name | device_id</b> - get details on a device</br>
 <b>set temp of Thermostat to 15</b> - execute a device action using rule action syntax</br>
-<b>user defined keyword</b> - Triggers a defined rule with the "telegram received 'user-defined-keyword'" condition</br>
-<b>user defined keyword \<var1\> \<varN\></b> - Triggers a defined rule with the "telegram received 'user-defined-keyword' with arguments" condition</br>
+<b>user defined keyword</b> - Triggers a defined rule with the "telegram received 'user-defined-keyword'" predicate</br>
+<b>user defined keyword \<var1\> ... \<varN\></b> - Triggers a defined rule with the "telegram received 'user-defined-keyword' with arguments" predicate</br>
 
 
 Preinstallation Requirements
@@ -64,37 +68,10 @@ Installation and Configuration:
 
 ### Obtain your chatID
 
-- With your Telegram client start a conversation with your bot (@MyAwesomePimaticBot)
-- send a message, doesn't matter what the content is
-- in your browser, type: https://api.telegram.org/bot784324329:EETRNJU3jQEGWQdjNv3llb4bnDSDREGuuuL/getUpdates (replace the string after bot with your own token)
-- in your browser you will see a JSON response similar to the below:
-````json
-{
-  "ok":true,
-  "result":
-  [{
-    "update_id":100,
-    "message":{
-      "message_id":12,
-      "from":
-      {
-        "id": "<this_is_the_number_you_need!>",
-        "first_name":"fname","username":"uname"
-      },
-      "chat":
-      {
-        "id":123456789,
-        "first_name":"fname",
-        "username":"uname",
-        "type":"private"
-      },
-      "date":1481753058,
-      "text":"Hello World!"
-    }
-  }]
-}
-````
-- Look for the number after "id", and save it
+- With your Telegram client start a conversation with the ID bot (@myidbot)
+- send /getid
+- The bot will respond with your ChatID, e.g. 315123987
+- Take note of this number
 - Repeat for each recipient you want to register in Pimatic
 
 ### Install the Plugin (required for using the send telegram functions)
