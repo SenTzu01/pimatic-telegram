@@ -21,6 +21,7 @@
   "configSchema": "telegram-config-schema.coffee",
   "dependencies": {
     "pimatic-plugin-commons": "^0.8.7",
+    "i18n-pimatic": "^0.8.3",
     "telegraf": "^3.33.3"
   },
   "peerDependencies": {

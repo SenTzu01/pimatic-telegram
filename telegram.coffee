@@ -8,7 +8,9 @@ module.exports = (env) ->
   M = env.matcher
   _ = env.require 'lodash'
   assert = env.require 'cassert'
+  i18n = env.require('i18n')
   
+
   
   # Telegraf implementation
   TelegrafBot = require('telegraf')
@@ -35,7 +37,7 @@ module.exports = (env) ->
         migrate: =>
           if oldChatId.oldId() isnt null
             if oldChatId.migrated() is null
-              env.logger.info "old userChatId: " + oldChatId.oldId() + " found, migrating..."
+              env.logger.info __("old userChatId: %s found, migrating...", oldChatId.oldId())
               oldChatId = {name: oldChatId.name, userChatId: oldChatId.oldId(), enabled: oldChatId.enabled}
               @config.recipients.push oldChatId
             else
@@ -46,7 +48,10 @@ module.exports = (env) ->
     
     
     init: (app, @framework, @config) =>
-      
+      i18n.configure({
+        defaultLocale: @framework.config.settings.locale,
+        directory: __dirname + '/../pimatic/locales'
+      })
       @migrateMainChatId(@framework, @config)
       
       @framework.ruleManager.addPredicateProvider(new TelegramPredicateProvider(@framework, @config))
@@ -261,7 +266,7 @@ module.exports = (env) ->
         env.logger.debug 'TelegramActionHandler::_onReceivedRulePredicate event => ruleId: ' + @ruleId + ', reply: ' + @reply + ', cmd: ' + cmd + ', trigger: ' + @trigger + ', sender: ' + sender.getName()
         @message.recipients = []
         @message.recipients.push sender
-        env.logger.info @ruleId + ': Resolving [sender] to: ' + sender.getName()
+        env.logger.info __("%s: Resolving [sender] to: %s", @ruleId, sender.getName())
       
     _addListener: (listener) -> listener.on 'receivedRulePredicate', @_onReceivedRulePredicate
     
@@ -443,7 +448,7 @@ module.exports = (env) ->
           command: "execute",
           type: "restricted"
           action: => 
-            env.logger.warn "command 'execute' received; This is not allowed for security reasons" # It's a trap !!
+            env.logger.warn __("command 'execute' received; This is not allowed for security reasons") # It's a trap !!
             return null
           protected: false
           response: (msg) ->
@@ -481,11 +486,11 @@ module.exports = (env) ->
       
       
     start: (@client, options) =>
-      env.logger.info "Starting Telegram listener"
+      env.logger.info __("Starting Telegram listener")
       @enablecommands()
       @client.startPolling(options.timeout, options.limit)
     stop: (@client) =>
-      env.logger.info "Stopping Telegram listener"
+      env.logger.info __("Stopping Telegram listener")
       @authenticated = []
       @client.stop( () =>
         return true
@@ -500,8 +505,8 @@ module.exports = (env) ->
         
         # auth logic
         if !sender.isAdmin() # Lord Vader force-chokes you !!
-          msg.reply("You are not authorized on this system. Details have been logged!")
-          env.logger.warn "Incoming request from user denied; user not authorized. Details below:\nName:\t\t" + msg.from.first_name + "\nchatID:\t\t" + msg.from.id + "\nusername:\t" + msg.from.username + "\nResult:\tSession terminated"
+          msg.reply __("You are not authorized on this system. Details have been logged!")
+          env.logger.warn __("Incoming request from user denied; user not authorized. Details below:\nName:\t\t%s\nchatID:\t\t%s\nusername:\t%s\nResult:\tSession terminated", msg.from.first_name, msg.from.id, msg.from.username)
           return
         
         date = new Date()
@@ -509,9 +514,9 @@ module.exports = (env) ->
         if instance.config.secret is msg.message.text or instance.config.disable2FA # Face Vader you must!
           @authenticated.push {id: sender.getId(), time: date.getTime()}
 
-          msg.reply("Passcode correct, timeout set to " + instance.config.auth_timeout + " minutes. You can now issue commands") unless instance.config.disable2FA
+          msg.reply __("Passcode correct, timeout set to " + instance.config.auth_timeout + " minutes. You can now issue commands") unless instance.config.disable2FA
           
-          env.logger.info sender.getName() + " successfully authenticated"
+          env.logger.info __("%s successfully authenticated", sender.getName())
           return unless instance.config.disable2FA
         
         for auth in @authenticated
@@ -526,7 +531,7 @@ module.exports = (env) ->
         match = false
         # message logic
         if sender.isAuthenticated()  # May the force be with you
-          env.logger.info "command '" + message + "' received from " + sender.getName()
+          env.logger.info __("command '%s' received from %s", message, sender.getName())
           
           for req in @requests
             if (req.type is "rule" or req.type is "base") and req.command.toLowerCase() is message.slice(0, req.command.length)
@@ -547,9 +552,8 @@ module.exports = (env) ->
                     req.action()
                     TelegramPlugin.updateRuleByString(rule.id, {ruleString: rule.string})
                   else
-                    msg.reply("'" + rule.id + "' action takes a minimum of " + vars.length + " arguments.")
-                    
-                    
+                    msg.reply __("'%s' action takes a minimum of %s arguments.", rule.id, vars.length)
+                  
                 else
                   @emit('receivedRulePredicate', req.command, sender, req.id)
                   req.action()
@@ -567,17 +571,17 @@ module.exports = (env) ->
               if han?
                 han.actionHandler.executeAction()
                 if instance.config.confirmDeviceAction
-                  msg.reply("command '" + message + "' executed")
+                  msg.reply __("command '%s' executed", message)
                 match = true
                 break
 
           if !match
-            msg.reply("'" + message + "' is not a valid message")
+            msg.reply __("'%s' is not a valid message", message)
             return
           return
         
         else # Vader face you must
-          msg.reply("Please provide the passcode first and reissue your command after")
+          msg.reply __("Please provide the passcode first and reissue your command after")
           return
       )
       
@@ -598,7 +602,7 @@ module.exports = (env) ->
           protected: true
           type: "rule"
           sender: null
-          response: () => return "Rule condition '" + obj.command + "' triggered by " + obj.sender.getName()
+          response: () => return __("Rule condition '%s' triggered by %s", obj.command, obj.sender.getName())
         }
         @requests.push obj
         env.logger.debug "Listener enabled ruleset command: '", obj.command, "'"
@@ -658,7 +662,7 @@ module.exports = (env) ->
           Promise.some(results, results.length).then( (result) =>
             resolve
           ).catch(Promise.AggregateError, (err) =>
-            @base.rejectWithErrorString Promise.reject, "Message was NOT sent to all recipients"
+            @base.rejectWithErrorString Promise.reject, __("Message was NOT sent to all recipients")
           )
         ).catch( (err) =>
           @base.error err
@@ -710,7 +714,7 @@ module.exports = (env) ->
           )
         )   
       ).catch( (err) =>
-        @base.rejectWithErrorString Promise.reject, "Unable to get content"
+        @base.rejectWithErrorString Promise.reject, __("Unable to get content")
       )
     
     sendMessageParts: (message, recipient, log) =>
@@ -726,7 +730,7 @@ module.exports = (env) ->
       @content.get().then( (file) =>
         return @recipients.map( (r) => @processResult(@client.sendVideo(r.getId(), {source: file}), file, r.getName(), log))
       ).catch( (err) =>
-        @base.rejectWithErrorString Promise.reject, "Unable to send Video file"
+        @base.rejectWithErrorString Promise.reject, __("Unable to send Video file")
       )
       
   class AudioMessage extends Message
@@ -739,7 +743,7 @@ module.exports = (env) ->
         .then( (file) =>
           return @recipients.map( (r) => @processResult(@client.sendAudio(r.getId(), {source: file}), file, r.getName(), log))
         ).catch((err) =>
-          @base.rejectWithErrorString Promise.reject, "Unable to send Audio file"
+          @base.rejectWithErrorString Promise.reject, __("Unable to send Audio file")
         )
       
   class PhotoMessage extends Message
@@ -752,7 +756,7 @@ module.exports = (env) ->
         .then( (file) =>
             return @recipients.map( (r) => @processResult(@client.sendPhoto(r.getId(), {source: file} ), r.getName(), log))
         ).catch( (err) =>
-            @base.rejectWithErrorString Promise.reject, "Unable to send Image file"
+            @base.rejectWithErrorString Promise.reject, __("Unable to send Image file")
         )
   
   class DocumentMessage extends Message
@@ -765,7 +769,7 @@ module.exports = (env) ->
         .then( (file) =>
             return @recipients.map( (r) => @processResult(@client.sendDocument(r.getId(), { source: file} ), r.getName(), log))
         ).catch( (err) =>
-            @base.rejectWithErrorString Promise.reject, "Unable to send file"
+            @base.rejectWithErrorString Promise.reject, __("Unable to send file")
         )
   
   class LocationMessage extends Message
@@ -777,7 +781,7 @@ module.exports = (env) ->
       @content.get().then( (gps) =>
         return @recipients.map( (r) => @processResult(@client.sendLocation(r.getId(), gps[0], gps[1]), gps, r.getName()))
       ).catch( (err) =>
-          @base.rejectWithErrorString Promise.reject, "Unable to send Location coordinates"
+          @base.rejectWithErrorString Promise.reject, __("Unable to send Location coordinates")
       )
             
   class Recipient
