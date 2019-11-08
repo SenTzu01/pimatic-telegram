@@ -430,18 +430,18 @@ module.exports = (env) ->
           action: -> return null
           protected: false
           response: (msg) =>
-            text = "Default commands:\n"
+            text = __("Default commands:\n")
             for req in @requests
               if req.type is "base"
-                text += "\t" + req.command
+                text += __("\t%s", req.command)
                 if req.command is "get device"
-                  text += " device_name | device_id"
-                text += "\n"
-            text += "\nRule commands: \n"
+                  text += __(" device_name | device_id")
+                text += __("\n")
+            text += __("\nRule commands: \n")
             for req in @requests
               if req.type is "rule"
-                text += "\t" + req.command + "\n"
-            text += "\nAny command following rule action syntax\nExamples:\n\t'turn on device'\n\t'set temp of device to 21'\n"
+                text += __("\t%s\n", req.command)
+            text += __("\nAny command following rule action syntax\nExamples:\n\t'turn on device'\n\t'set temp of device to 21'\n")
             return text
         },
         {
@@ -452,7 +452,7 @@ module.exports = (env) ->
             return null
           protected: false
           response: (msg) ->
-            text = "command 'execute' received; This is not allowed for security reasons"
+            text = __("command 'execute' received; This is not allowed for security reasons")
             return text
         },
         {
@@ -462,9 +462,9 @@ module.exports = (env) ->
           protected: true
           response: (msg) ->
             devices = TelegramPlugin.getDevices()
-            text = 'Devices :\n'
+            text = __('Devices :\n')
             for dev in devices
-              text += '\tName: ' + dev.name + "\n\tID: " + dev.id + "\n\n"
+              text += __("\tName: %s\n\tID: %s\n\n", dev.name, dev.id)
             return text
         },
         {
@@ -477,9 +477,9 @@ module.exports = (env) ->
             devices = TelegramPlugin.getDevices()
             for dev in devices
               if ( obj[1].substring(1) == dev.id.toLowerCase() ) or ( obj[1].substring(1) == dev.name.toLowerCase() )
-                text = 'Name: ' + dev.name + "\nID: " + dev.id + "\nType: " +  dev.constructor.name + "\n"
+                text = __("Name: %s\nID: %s\nType: %s\n", dev.name, dev.id, dev.constructor.name)
                 for name of dev.attributes
-                  text += '\t\t' + name.charAt(0).toUpperCase() + name.slice(1) + ": " + dev.getLastAttributeValue(name) + "\n"
+                  text += __("\t\t%s: %s\n", name.charAt(0).toUpperCase() + name.slice(1), dev.getLastAttributeValue(name))
                 return text
             return "device not found"
         }]
