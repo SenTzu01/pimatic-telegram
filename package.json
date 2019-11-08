@@ -12,7 +12,7 @@
     "LICENSE",
     "INSTALL"
   ],
-  "version": "1.1.13",
+  "version": "1.1.14",
   "homepage": "https://github.com/SenTzu01/pimatic-telegram",
   "repository": {
     "type": "git",
@@ -27,7 +27,7 @@
     "pimatic": ">=0.9.*"
   },
   "engines": {
-    "node": ">0.8.x",
+    "node": ">=8.0.0",
     "npm": ">1.1.x"
   },
   "bugs": {
