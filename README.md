@@ -1,3 +1,5 @@
+### Looking for a new maintainer. I currently no longer have the time to maintain the code of this plugin. Please contact me if interested.
+
 pimatic-Telegram
 =======================
 
